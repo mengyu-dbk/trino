@@ -14,8 +14,10 @@
 package io.trino.plugin.memory;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.plugin.memory.type.UInt256Type;
 import io.trino.spi.Plugin;
 import io.trino.spi.connector.ConnectorFactory;
+import io.trino.spi.type.Type;
 
 public final class MemoryPlugin
         implements Plugin
@@ -24,5 +26,11 @@ public final class MemoryPlugin
     public Iterable<ConnectorFactory> getConnectorFactories()
     {
         return ImmutableList.of(new MemoryConnectorFactory());
+    }
+
+    @Override
+    public Iterable<Type> getTypes()
+    {
+        return ImmutableList.of(UInt256Type.UINT256);
     }
 }
