@@ -5,11 +5,11 @@
 
 ## 特性
 - 类型名称: `uint256`
-- 底层表示: `VARBINARY(32)`（建议并默认规范化为大端32字节）
+- 底层表示: `VARBINARY()`（默认规范化为大端32字节）(如果有性能/存储放大问题，后面可以规划到使用char(32) 来实现）
 - 支持能力:
   - 比较、排序、读写
   - 算术：加法（`+`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
-  - CAST：`varbinary ↔ uint256`
+  - CAST：`varbinary ↔ uint256` `bigint -> uint256`
   - 便捷构造函数：`uint256(varbinary)`
 - 空值支持: 与 SQL 一致
 - 数值范围: 0 .. 2^256 - 1
@@ -23,8 +23,17 @@
 
 ## 使用方法
 
+### 0) 如何测试
+- 需要按照Trino根目录README的步骤编译，并确认能够启动开发服务器。
+- Intellij 在项目结构-模块中导入pom.xml，加载所有模块。（有的时候开发一下就没法启动了，重新clone是最简单的修复方式）
+- 启动 Trino 集群，加载 `trino-uint256` 插件（放置到 `plugin/` 目录下并重启）
+- 使用 `memory` 连接器（或其他支持的连接器）
+- 创建测试表，插入数据，执行查询。
+
 ### 1) 创建表（使用 memory connector）
 ```sql
+create schema memory.default; -- using default memory catalog
+use memory.default;
 CREATE TABLE memory.default.uint256_test (
     id INTEGER,
     v  uint256

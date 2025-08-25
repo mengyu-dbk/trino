@@ -19,6 +19,7 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.function.ScalarFunction;
 import io.trino.spi.function.ScalarOperator;
 import io.trino.spi.function.SqlType;
+import io.trino.spi.type.StandardTypes;
 
 import static io.trino.spi.StandardErrorCode.INVALID_CAST_ARGUMENT;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
@@ -81,12 +82,46 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(ensureUint256(value));
     }
 
+    // CAST(bigint -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType("uint256")
+    public static Slice castFromBigintToUint256(@SqlType(StandardTypes.BIGINT) long input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative BIGINT value %s to UINT256", input));
+        }
+        return uint256(input);
+    }
+
     // Convenience constructor function: uint256(varbinary)
     @ScalarFunction("uint256")
     @SqlType("uint256")
     public static Slice uint256(@SqlType("varbinary") Slice input)
     {
         return castFromVarbinaryToUint256(input);
+    }
+
+    // Convenience constructor function: uint256(bigint)
+    @ScalarFunction("uint256")
+    @SqlType("uint256")
+    public static Slice uint256(@SqlType(StandardTypes.BIGINT) long input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative BIGINT value %s to UINT256", input));
+        }
+        return castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, // 最高24字节为空
+                (byte) ((input >>> 56) & 0xFF),
+                (byte) ((input >>> 48) & 0xFF),
+                (byte) ((input >>> 40) & 0xFF),
+                (byte) ((input >>> 32) & 0xFF),
+                (byte) ((input >>> 24) & 0xFF),
+                (byte) ((input >>> 16) & 0xFF),
+                (byte) ((input >>> 8) & 0xFF),
+                (byte) (input & 0xFF)
+        }));
     }
 
     private static byte[] ensureUint256(Slice value)
