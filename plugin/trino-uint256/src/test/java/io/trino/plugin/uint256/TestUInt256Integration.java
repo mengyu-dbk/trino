@@ -118,4 +118,83 @@ public class TestUInt256Integration
                 "VALUES ('0000000000000000000000000000000000000000000000000000000000000010')," +
                         "('0000000000000000000000000000000000000000000000000000000000000100')");
     }
+
+    @Test
+    public void testVarcharCasts()
+    {
+        // 正向：VARCHAR -> UINT256（含0x前缀、大小写、奇数字符自动补0）
+        assertQuery(
+                "SELECT to_hex(CAST(CAST('0x01' AS uint256) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000001'");
+        assertQuery(
+                "SELECT to_hex(CAST(CAST('ff' AS uint256) AS varbinary))",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000ff'");
+        assertQuery(
+                "SELECT to_hex(CAST(CAST('F' AS uint256) AS varbinary))",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000000f'");
+
+        // 反向：UINT256 -> VARCHAR（固定64位小写hex）
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('0A0B') AS uint256) AS VARCHAR)",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000a0b'");
+
+        // 错误：非法字符
+        assertQueryFails("SELECT CAST('0xz1' AS uint256)", ".*Invalid hex digit.*");
+        // 错误：长度>64
+        String longHex = "F".repeat(65);
+        assertQueryFails("SELECT CAST('" + longHex + "' AS uint256)", ".*Invalid UINT256 hex length.*");
+    }
+
+    @Test
+    public void testSubMulDiv()
+    {
+        // subtraction 正常
+        assertQuery(
+                "SELECT to_hex(CAST(CAST(from_hex('0100') AS uint256) - CAST(from_hex('01') AS uint256) AS varbinary))",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+        // subtraction 下溢
+        assertQueryFails(
+                "SELECT CAST(from_hex('00') AS uint256) - CAST(from_hex('01') AS uint256)",
+                ".*uint256 subtraction underflow.*");
+
+        // multiply 正常
+        assertQuery(
+                "SELECT to_hex(CAST(CAST(from_hex('02') AS uint256) * CAST(from_hex('03') AS uint256) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000006'");
+        // multiply 上溢
+        assertQueryFails(
+                "SELECT CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS uint256) * CAST(from_hex('02') AS uint256)",
+                ".*uint256 multiplication overflow.*");
+
+        // divide 正常
+        assertQuery(
+                "SELECT to_hex(CAST(CAST(from_hex('10') AS uint256) / CAST(from_hex('04') AS uint256) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000004'");
+        // divide by zero
+        assertQueryFails(
+                "SELECT CAST(from_hex('10') AS uint256) / CAST(from_hex('00') AS uint256)",
+                ".*Division by zero.*");
+    }
+
+    @Test
+    public void testBitwiseFunctions()
+    {
+        // and
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000000'");
+        // or
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+        // xor
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_xor(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+        // not
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_not(CAST(from_hex('00FF') AS uint256)) AS varbinary))",
+                // ~00FF => leading FFs then FF00
+                "VALUES 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00'");
+    }
 }
