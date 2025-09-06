@@ -21,6 +21,8 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigInteger;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -31,16 +33,31 @@ public class TestUInt256Query
     @Test
     public void testBasicProperties()
     {
-        assertThat(uint256Type.getDisplayName()).isEqualTo("uint256");
+        // 测试类型名称和显示名称
+        assertThat(uint256Type.getDisplayName()).isEqualTo(UInt256Type.NAME);
+        assertThat(uint256Type.getTypeSignature().getBase()).isEqualTo(UInt256Type.NAME);
+
+        // 测试比较和排序能力
         assertThat(uint256Type.isComparable()).isTrue();
         assertThat(uint256Type.isOrderable()).isTrue();
+
+        // 测试Java类型映射
+        System.out.println(uint256Type.getJavaType());
         assertThat(uint256Type.getJavaType()).isEqualTo(Slice.class);
+
+        // 测试类型签名参数
+        System.out.println(uint256Type.getTypeSignature());
+        assertThat(uint256Type.getTypeSignature().getParameters()).isEmpty();
+
+        // 测试类型类别（如果有的话）
+        System.out.println(uint256Type.getTypeId());
+        assertThat(uint256Type.getTypeId()).isNotNull();
     }
 
     @Test
     public void testBlockBuilderAndReader()
     {
-        BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 1);
+        BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 2); // 明确指定容量为2
 
         // 创建一个32字节的测试数据
         byte[] testData = new byte[32];
@@ -49,22 +66,55 @@ public class TestUInt256Query
         }
         Slice testSlice = Slices.wrappedBuffer(testData);
 
+        byte[] testData2 = testData.clone();
+        testData2[0] = 99;
+        Slice testSliceCopy = Slices.wrappedBuffer(testData2);
+
         // 写入数据
         uint256Type.writeSlice(blockBuilder, testSlice);
+        uint256Type.writeSlice(blockBuilder, testSliceCopy); // 测试写入副本
 
         // 构建block
         Block block = blockBuilder.build();
 
-        // 验证数据
+        // 验证block基本属性
+        assertThat(block.getPositionCount()).isEqualTo(2);
+
+        // 验证数据1
         assertThat(block.isNull(0)).isFalse();
         Slice readSlice = uint256Type.getSlice(block, 0);
         assertThat(readSlice.length()).isEqualTo(32);
         assertThat(readSlice.getBytes()).isEqualTo(testData);
 
+        // 验证数据2
+        assertThat(block.isNull(1)).isFalse();
+        Slice readSlice2 = uint256Type.getSlice(block, 1);
+        assertThat(readSlice2.length()).isEqualTo(32);
+        assertThat(readSlice2.getBytes()).isEqualTo(testData2);
+
+        // 验证数据不相等
+        assertThat(readSlice.getBytes()).isNotEqualTo(testData2);
+        assertThat(readSlice2.getBytes()).isNotEqualTo(testData);
+
+        // 测试越界访问
+        assertThatThrownBy(() -> block.isNull(2))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> uint256Type.getSlice(block, 2))
+                .isInstanceOf(IllegalArgumentException.class);
+
         // 验证Object值
         Object objectValue = uint256Type.getObjectValue(block, 0);
         assertThat(objectValue).isNotNull();
         assertThat(objectValue).isEqualTo(testData);
+
+        Object objectValue2 = uint256Type.getObjectValue(block, 1);
+        assertThat(objectValue2).isNotNull();
+        assertThat(objectValue2).isEqualTo(testData2);
+
+        // 验证数据独立性（修改原始数据不影响存储的数据）
+        testData[0] = 127;
+        Slice readSliceAgain = uint256Type.getSlice(block, 0);
+        assertThat(readSliceAgain.getByte(0)).isEqualTo((byte) 0); // 应该仍是原来的值
     }
 
     @Test
@@ -107,7 +157,7 @@ public class TestUInt256Query
     @Test
     public void testTypeSignature()
     {
-        assertThat(uint256Type.getTypeSignature().getBase()).isEqualTo("uint256");
+        assertThat(uint256Type.getTypeSignature().getBase()).isEqualTo(UInt256Type.NAME);
         assertThat(uint256Type.getTypeSignature().getParameters()).isEmpty();
     }
 
@@ -141,7 +191,7 @@ public class TestUInt256Query
     }
 
     @Test
-    public void testInvalidLength()
+    public void testInvalidLengthTooShort()
     {
         BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 1);
 
@@ -149,34 +199,62 @@ public class TestUInt256Query
         byte[] shortData = new byte[16];
         Slice shortSlice = Slices.wrappedBuffer(shortData);
 
-        // 这应该正常工作，因为AbstractVariableWidthType支持可变长度
-        uint256Type.writeSlice(blockBuilder, shortSlice);
-
-        Block block = blockBuilder.build();
-        Slice readSlice = uint256Type.getSlice(block, 0);
-        assertThat(readSlice.length()).isEqualTo(16);
+        assertThatThrownBy(() -> uint256Type.writeSlice(blockBuilder, shortSlice))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 length should be 32 bytes");
     }
 
     @Test
-    public void testOverflowLength()
+    public void testInvalidLengthTooLong()
     {
         BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 1);
 
         // 测试超过32字节的数据
         byte[] longData = new byte[64];
+        longData[0] = 1;
+        longData[63] = 2;
         Slice longSlice = Slices.wrappedBuffer(longData);
 
-        // 这应该正常工作，因为AbstractVariableWidthType支持可变长度
-        uint256Type.writeSlice(blockBuilder, longSlice);
+        assertThatThrownBy(() -> uint256Type.writeSlice(blockBuilder, longSlice))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 length should be 32 bytes");
+    }
 
-        Block block = blockBuilder.build();
-        Slice readSlice = uint256Type.getSlice(block, 0);
-        assertThat(readSlice.length()).isEqualTo(64);
+    @Test
+    public void testInvalidLengthEdgeCases()
+    {
+        BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 3);
+
+        // 测试空数据
+        byte[] emptyData = new byte[0];
+        Slice emptySlice = Slices.wrappedBuffer(emptyData);
+        assertThatThrownBy(() -> uint256Type.writeSlice(blockBuilder, emptySlice))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 length should be 32 bytes");
+
+        // 测试31字节（差1字节）
+        byte[] almostCorrectData = new byte[31];
+        Slice almostCorrectSlice = Slices.wrappedBuffer(almostCorrectData);
+        assertThatThrownBy(() -> uint256Type.writeSlice(blockBuilder, almostCorrectSlice))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 length should be 32 bytes");
+
+        // 测试33字节（多1字节）
+        byte[] slightlyTooLongData = new byte[33];
+        Slice slightlyTooLongSlice = Slices.wrappedBuffer(slightlyTooLongData);
+        assertThatThrownBy(() -> uint256Type.writeSlice(blockBuilder, slightlyTooLongSlice))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 length should be 32 bytes");
     }
 
     @Test
     public void testBlockBuilderCapacity()
     {
+        // 测试不为32字节抛出错误
+        assertThatThrownBy(() -> uint256Type.createBlockBuilder(null, 10, 16))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 block entry length should be 32 bytes");
+
         // 测试BlockBuilder的容量管理
         BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 10, 32);
 
@@ -215,6 +293,37 @@ public class TestUInt256Query
         Block targetBlock = targetBuilder.build();
         Slice readSlice = uint256Type.getSlice(targetBlock, 0);
         assertThat(readSlice.getBytes()).isEqualTo(testData);
+    }
+
+    @Test
+    public void testAppendToWithNulls()
+    {
+        // 测试包含null值的appendTo
+        BlockBuilder sourceBuilder = uint256Type.createBlockBuilder(null, 3);
+
+        byte[] testData = new byte[32];
+        testData[0] = 42;
+        uint256Type.writeSlice(sourceBuilder, Slices.wrappedBuffer(testData));
+        sourceBuilder.appendNull();
+
+        testData[0] = 24;
+        uint256Type.writeSlice(sourceBuilder, Slices.wrappedBuffer(testData));
+
+        Block sourceBlock = sourceBuilder.build();
+
+        BlockBuilder targetBuilder = uint256Type.createBlockBuilder(null, 3);
+        for (int i = 0; i < 3; i++) {
+            uint256Type.appendTo(sourceBlock, i, targetBuilder);
+        }
+
+        Block targetBlock = targetBuilder.build();
+        assertThat(targetBlock.getPositionCount()).isEqualTo(3);
+        assertThat(targetBlock.isNull(0)).isFalse();
+        assertThat(targetBlock.isNull(1)).isTrue();
+        assertThat(targetBlock.isNull(2)).isFalse();
+
+        assertThat(uint256Type.getSlice(targetBlock, 0).getByte(0)).isEqualTo((byte) 42);
+        assertThat(uint256Type.getSlice(targetBlock, 2).getByte(0)).isEqualTo((byte) 24);
     }
 
     @Test
@@ -292,72 +401,68 @@ public class TestUInt256Query
         }
         assertThat(reconstructed).isEqualTo(value);
     }
-    /*
+
     @Test
     public void testVarcharCastRoundtrip()
     {
-        // '' -> 0
-        Slice zero = UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice(""));
-        assertThat(zero.length()).isEqualTo(32);
-        for (byte b : zero.getBytes()) {
-            assertThat(b).isEqualTo((byte) 0);
-        }
-        // '0x0f' -> 0x0f
-        Slice v = UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("0x0f"));
+        // '' is not valid
+        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Invalid UINT256 value:");
+        // '15' -> 15
+        Slice v = UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("15"));
         String hex = UInt256Operators.castFromUint256ToVarchar(v).toStringUtf8();
-        assertThat(hex).endsWith("0f");
-        assertThat(hex.length()).isEqualTo(64);
+        assertThat(hex).endsWith("15");
 
         // 长度校验
-        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("F".repeat(65))))
+        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("115792089237316195423570985008687907853269984665640564039457584007913129639936")))
                 .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Invalid UINT256 hex length");
+                .hasMessageContaining("uint256 value out of range");
         // 非法字符
-        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("0xz1")))
+        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("123F")))
                 .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Invalid hex digit");
+                .hasMessageContaining("Invalid UINT256 value: ");
     }
-    */
+
     @Test
     public void testAddition()
     {
         // Test: 0 + 0 = 0
         Slice zero = uint256FromHex("0");
         Slice result = UInt256Operators.add(zero, zero);
-        assertThat("0000000000000000000000000000000000000000000000000000000000000000").isEqualTo(toHex(result));
+        assertThat("0").isEqualTo(toDecimal(result));
 
         // Test: 1 + 1 = 2
         Slice one = uint256FromHex("1");
         Slice two = uint256FromHex("2");
         result = UInt256Operators.add(one, one);
-        assertThat(toHex(two)).isEqualTo(toHex(result));
+        assertThat(toDecimal(two)).isEqualTo(toDecimal(result));
 
         // Test: 255 + 1 = 256 (carry propagation)
         Slice ff = uint256FromHex("ff");
         Slice hundred = uint256FromHex("100");
         result = UInt256Operators.add(ff, one);
-        assertThat(toHex(hundred)).isEqualTo(toHex(result));
+        assertThat(toDecimal(hundred)).isEqualTo(toDecimal(result));
 
         // Test: large numbers
         Slice large1 = uint256FromHex("123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
         Slice large2 = uint256FromHex("fedcba9876543210fedcba9876543210fedcba9876543210fedcba987654321");
         result = UInt256Operators.add(large1, large2);
         // Expected: 1111111111111110111111111111111011111111111111101111111111111110
-        assertThat(toHex(result)).isEqualTo("1111111111111110111111111111111011111111111111101111111111111110");
+        assertThat(toDecimal(result)).isEqualTo("7719472615821079688627630598525846426041927187580766056379662137891363033360");
     }
 
-    /*
     @Test
     public void testAdditionOverflow()
     {
         // Test overflow: MAX_UINT256 + 1
         Slice maxUint256 = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         Slice one = uint256FromHex("1");
+        Slice zero = uint256FromHex("0");
 
-        TrinoException exception = assertThrows(TrinoException.class,
-                () -> UInt256Operators.add(maxUint256, one));
-        assertEquals(NUMERIC_VALUE_OUT_OF_RANGE, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("uint256 addition overflow"));
+        assertThatThrownBy(() -> UInt256Operators.add(maxUint256, one)).isInstanceOf(TrinoException.class)
+                .hasMessageContaining("uint256 addition overflow");
+        assertThat(toDecimal(UInt256Operators.add(maxUint256, zero))).isEqualTo(toDecimal(maxUint256));
     }
 
     @Test
@@ -366,15 +471,25 @@ public class TestUInt256Query
         // Test multiple byte carry propagation
         Slice value1 = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00");
         Slice value2 = uint256FromHex("ff");
-        Slice expected = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice expected1 = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
-        Slice result = UInt256Operators.add(value1, value2);
-        assertEquals(toHex(expected), toHex(result));
+        Slice result1 = UInt256Operators.add(value1, value2);
+        assertThat(toDecimal(expected1)).isEqualTo(toDecimal(result1));
+
+        Slice value3 = uint256FromHex("1fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice value4 = uint256FromHex("1");
+        Slice unexpected = uint256FromHex("2fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice expected2 = uint256FromHex("2000000000000000000000000000000000000000000000000000000000000000");
+
+        Slice result2 = UInt256Operators.add(value3, value4);
+        assertThat(toDecimal(expected2)).isEqualTo(toDecimal(result2)).isNotEqualTo(toDecimal(unexpected));
     }
-    */
 
     private Slice uint256FromHex(String hex)
     {
+        if (hex.length() > 64) {
+            throw new IllegalArgumentException("Hex string too long for UINT256: " + hex);
+        }
         // Pad to 64 characters (32 bytes)
         String padded = String.format("%64s", hex).replace(' ', '0');
         byte[] bytes = new byte[32];
@@ -386,7 +501,7 @@ public class TestUInt256Query
         return Slices.wrappedBuffer(bytes);
     }
 
-    private String toHex(Slice slice)
+    private String toDecimal(Slice slice)
     {
         return UInt256Operators.castFromUint256ToVarchar(slice).toStringUtf8();
     }
@@ -408,13 +523,13 @@ public class TestUInt256Query
         // subtract: 0x0100 - 0x01 = 0x00ff
         Slice sub = UInt256Operators.subtract(a, b);
         String subHex = UInt256Operators.castFromUint256ToVarchar(sub).toStringUtf8();
-        assertThat(subHex).endsWith("00ff");
+        assertThat(subHex).endsWith("255");
 
         // multiply: 0x02 * 0x03 = 0x06
         Slice m2 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x02}));
         Slice m3 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x03}));
         Slice mul = UInt256Operators.multiply(m2, m3);
-        assertThat(UInt256Operators.castFromUint256ToVarchar(mul).toStringUtf8()).endsWith("0006");
+        assertThat(UInt256Operators.castFromUint256ToVarchar(mul).toStringUtf8()).endsWith("6");
 
         // multiply overflow: max * 2
         byte[] max = new byte[32];
@@ -430,7 +545,7 @@ public class TestUInt256Query
         Slice d10 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x10}));
         Slice d4 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x04}));
         Slice div = UInt256Operators.divide(d10, d4);
-        assertThat(UInt256Operators.castFromUint256ToVarchar(div).toStringUtf8()).endsWith("0004");
+        assertThat(UInt256Operators.castFromUint256ToVarchar(div).toStringUtf8()).endsWith("4");
 
         // divide by zero
         Slice zeroU = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x00}));
@@ -447,21 +562,26 @@ public class TestUInt256Query
 
         // and => 0x00
         Slice and = UInt256Operators.bitwiseAnd(fzero, zerof);
-        assertThat(UInt256Operators.castFromUint256ToVarchar(and).toStringUtf8()).endsWith("0000");
+        assertThat(UInt256Operators.castFromUint256ToVarchar(and).toStringUtf8()).endsWith("0");
 
         // or => 0xFF
         Slice or = UInt256Operators.bitwiseOr(fzero, zerof);
-        assertThat(UInt256Operators.castFromUint256ToVarchar(or).toStringUtf8()).endsWith("00ff");
+        assertThat(UInt256Operators.castFromUint256ToVarchar(or).toStringUtf8()).endsWith("255");
 
         // xor => 0xFF
         Slice xor = UInt256Operators.bitwiseXor(fzero, zerof);
-        assertThat(UInt256Operators.castFromUint256ToVarchar(xor).toStringUtf8()).endsWith("00ff");
+        assertThat(UInt256Operators.castFromUint256ToVarchar(xor).toStringUtf8()).endsWith("255");
 
         // not(~0x00ff)
         Slice v00ff = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x00, (byte) 0xFF}));
         Slice not = UInt256Operators.bitwiseNot(v00ff);
-        String notHex = UInt256Operators.castFromUint256ToVarchar(not).toStringUtf8();
+        String notHex = toHex(UInt256Operators.castFromUint256ToVarbinary(not).byteArray());
 
         assertThat(notHex).isEqualTo("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00");
+    }
+
+    String toHex(byte[] bytes)
+    {
+        return new BigInteger(1, bytes).toString(16);
     }
 }

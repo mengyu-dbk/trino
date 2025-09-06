@@ -16,6 +16,7 @@ package io.trino.plugin.uint256.type;
 import io.airlift.slice.Slice;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.BlockBuilderStatus;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
 import io.trino.spi.type.AbstractVariableWidthType;
@@ -27,13 +28,14 @@ public class UInt256Type
         extends AbstractVariableWidthType
 {
     public static final UInt256Type UINT256 = new UInt256Type();
-    public static final String NAME = "uint256";
+    public static final String NAME = "UINT256";
 
     private static final TypeOperatorDeclaration TYPE_OPERATOR_DECLARATION = TypeOperatorDeclaration.builder(Slice.class)
             .addOperators(DEFAULT_READ_OPERATORS)
             .addOperators(DEFAULT_COMPARABLE_OPERATORS)
             .addOperators(DEFAULT_ORDERING_OPERATORS)
             .build();
+    public static final int UINT256_BYTE_LENGTH = 32;
 
     public UInt256Type()
     {
@@ -74,22 +76,47 @@ public class UInt256Type
     }
 
     @Override
+    public VariableWidthBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries)
+    {
+        return super.createBlockBuilder(blockBuilderStatus, expectedEntries, UINT256_BYTE_LENGTH);
+    }
+
+    @Override
+    public VariableWidthBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries, int expectedBytesPerEntry)
+    {
+        if (expectedBytesPerEntry != UINT256_BYTE_LENGTH) {
+            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes");
+        }
+        return super.createBlockBuilder(blockBuilderStatus, expectedEntries, expectedBytesPerEntry);
+    }
+
+    @Override
     public Slice getSlice(Block block, int position)
     {
         VariableWidthBlock valueBlock = (VariableWidthBlock) block.getUnderlyingValueBlock();
         int valuePosition = block.getUnderlyingValuePosition(position);
-        return valueBlock.getSlice(valuePosition);
+        Slice res = valueBlock.getSlice(valuePosition);
+        if (res.length() != UINT256_BYTE_LENGTH) {
+            throw new IllegalArgumentException("UINT256 length should be 32 bytes");
+        }
+        return res;
     }
 
     @Override
     public void writeSlice(BlockBuilder blockBuilder, Slice value)
     {
+        if (value.length() != UINT256_BYTE_LENGTH) {
+            throw new IllegalArgumentException("UINT256 length should be 32 bytes");
+        }
         writeSlice(blockBuilder, value, 0, value.length());
     }
 
     @Override
     public void writeSlice(BlockBuilder blockBuilder, Slice value, int offset, int length)
     {
+        if (length != UINT256_BYTE_LENGTH) {
+            throw new IllegalArgumentException("UINT256 length should be 32 bytes");
+        }
         ((VariableWidthBlockBuilder) blockBuilder).writeEntry(value, offset, length);
     }
 
