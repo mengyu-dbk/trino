@@ -15,13 +15,16 @@ package io.trino.plugin.uint256;
 
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.LiteralParameters;
 import io.trino.spi.function.ScalarFunction;
 import io.trino.spi.function.ScalarOperator;
 import io.trino.spi.function.SqlType;
 import io.trino.spi.type.StandardTypes;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 
 import static io.trino.spi.StandardErrorCode.DIVISION_BY_ZERO;
 import static io.trino.spi.StandardErrorCode.INVALID_CAST_ARGUMENT;
@@ -41,8 +44,8 @@ public final class UInt256Operators
 
     // uint256 + uint256 -> uint256
     @ScalarOperator(ADD)
-    @SqlType("uint256")
-    public static Slice add(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice add(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -62,8 +65,8 @@ public final class UInt256Operators
 
     // uint256 - uint256 -> uint256 (underflow error)
     @ScalarOperator(SUBTRACT)
-    @SqlType("uint256")
-    public static Slice subtract(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice subtract(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -79,8 +82,8 @@ public final class UInt256Operators
 
     // uint256 * uint256 -> uint256 (overflow error)
     @ScalarOperator(MULTIPLY)
-    @SqlType("uint256")
-    public static Slice multiply(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice multiply(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -95,8 +98,8 @@ public final class UInt256Operators
 
     // uint256 / uint256 -> uint256 (division by zero error)
     @ScalarOperator(DIVIDE)
-    @SqlType("uint256")
-    public static Slice divide(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice divide(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -111,7 +114,7 @@ public final class UInt256Operators
 
     // CAST(varbinary -> uint256)
     @ScalarOperator(CAST)
-    @SqlType("uint256")
+    @SqlType(UInt256Type.NAME)
     public static Slice castFromVarbinaryToUint256(@SqlType("varbinary") Slice input)
     {
         int len = input.length();
@@ -131,7 +134,7 @@ public final class UInt256Operators
     // CAST(uint256 -> varbinary)
     @ScalarOperator(CAST)
     @SqlType("varbinary")
-    public static Slice castFromUint256ToVarbinary(@SqlType("uint256") Slice value)
+    public static Slice castFromUint256ToVarbinary(@SqlType(UInt256Type.NAME) Slice value)
     {
         // Always 32 bytes normalized
         return Slices.wrappedBuffer(ensureUint256(value));
@@ -139,7 +142,7 @@ public final class UInt256Operators
 
     // CAST(bigint -> uint256)
     @ScalarOperator(CAST)
-    @SqlType("uint256")
+    @SqlType(UInt256Type.NAME)
     public static Slice castFromBigintToUint256(@SqlType(StandardTypes.BIGINT) long input)
     {
         if (input < 0) {
@@ -147,65 +150,43 @@ public final class UInt256Operators
         }
         return uint256(input);
     }
-    /*
-    // CAST(varchar -> uint256) : 支持可选 0x 前缀的十六进制字符串（大小写均可），长度<=64，奇数字符长度会自动左侧补0
+
+    // CAST(varchar -> uint256) : 只支持十进制字符串转换
     @ScalarOperator(CAST)
-    @SqlType("uint256")
-    public static Slice castFromVarcharToUint256(@SqlType(StandardTypes.VARCHAR) Slice input)
+    @LiteralParameters("x")
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromVarcharToUint256(@SqlType("varchar(x)") Slice input)
     {
-        String s = input.toStringUtf8().trim();
-        if (s.startsWith("0x") || s.startsWith("0X")) {
-            s = s.substring(2);
+        byte[] bytes = input.getBytes();
+        String res = new String(bytes, StandardCharsets.UTF_8);
+        try {
+            return Slices.wrappedBuffer(toFixedUint256(new BigInteger(res, 10)));
         }
-        if (s.isEmpty()) {
-            // treat empty as zero
-            return Slices.wrappedBuffer(new byte[UINT256_BYTES]);
+        catch (NumberFormatException e) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Invalid UINT256 value: %s", res));
         }
-        // validate hex characters
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            boolean isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
-            if (!isHex) {
-                throw new TrinoException(INVALID_CAST_ARGUMENT, format("Invalid hex digit '%s' in VARCHAR for UINT256", c));
-            }
-        }
-        if (s.length() > 64) {
-            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Invalid UINT256 hex length: %s (max 64)", s.length()));
-        }
-        if ((s.length() & 1) == 1) {
-            s = "0" + s;
-        }
-        byte[] decoded = hexToBytes(s);
-        // left-pad to 32 bytes
-        if (decoded.length == UINT256_BYTES) {
-            return Slices.wrappedBuffer(decoded);
-        }
-        byte[] out = new byte[UINT256_BYTES];
-        System.arraycopy(decoded, 0, out, UINT256_BYTES - decoded.length, decoded.length);
-        return Slices.wrappedBuffer(out);
     }
 
-    // CAST(uint256 -> varchar) : 输出64位小写十六进制字符串（无0x前缀）
+    // CAST(uint256 -> varchar) : 输出十进制字符串
     @ScalarOperator(CAST)
     @SqlType(StandardTypes.VARCHAR)
-    public static Slice castFromUint256ToVarchar(@SqlType("uint256") Slice value)
+    public static Slice castFromUint256ToVarchar(@SqlType(UInt256Type.NAME) Slice value)
     {
         byte[] bytes = ensureUint256(value);
-        String hex = toHex(bytes);
-        return Slices.wrappedBuffer(hex.getBytes(StandardCharsets.UTF_8));
+        return Slices.wrappedBuffer(new BigInteger(1, bytes).toString(10).getBytes(StandardCharsets.UTF_8));
     }
-    */
+
     // Convenience constructor function: uint256(varbinary)
-    @ScalarFunction("uint256")
-    @SqlType("uint256")
+    @ScalarFunction(UInt256Type.NAME)
+    @SqlType(UInt256Type.NAME)
     public static Slice uint256(@SqlType("varbinary") Slice input)
     {
         return castFromVarbinaryToUint256(input);
     }
 
     // Convenience constructor function: uint256(bigint)
-    @ScalarFunction("uint256")
-    @SqlType("uint256")
+    @ScalarFunction(UInt256Type.NAME)
+    @SqlType(UInt256Type.NAME)
     public static Slice uint256(@SqlType(StandardTypes.BIGINT) long input)
     {
         if (input < 0) {
@@ -228,8 +209,8 @@ public final class UInt256Operators
 
     // 位运算：与
     @ScalarFunction("bitwise_and")
-    @SqlType("uint256")
-    public static Slice bitwiseAnd(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseAnd(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -242,8 +223,8 @@ public final class UInt256Operators
 
     // 位运算：或
     @ScalarFunction("bitwise_or")
-    @SqlType("uint256")
-    public static Slice bitwiseOr(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseOr(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -256,8 +237,8 @@ public final class UInt256Operators
 
     // 位运算：异或
     @ScalarFunction("bitwise_xor")
-    @SqlType("uint256")
-    public static Slice bitwiseXor(@SqlType("uint256") Slice left, @SqlType("uint256") Slice right)
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseXor(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
     {
         byte[] a = ensureUint256(left);
         byte[] b = ensureUint256(right);
@@ -270,8 +251,8 @@ public final class UInt256Operators
 
     // 位运算：按位取反
     @ScalarFunction("bitwise_not")
-    @SqlType("uint256")
-    public static Slice bitwiseNot(@SqlType("uint256") Slice value)
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseNot(@SqlType(UInt256Type.NAME) Slice value)
     {
         byte[] a = ensureUint256(value);
         byte[] out = new byte[UINT256_BYTES];
@@ -281,7 +262,7 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(out);
     }
 
-    private static byte[] ensureUint256(Slice value)
+    private static byte[] ensureUint256(Slice value) // 保证是32字节，不足左侧补0
     {
         int len = value.length();
         if (len == UINT256_BYTES) {
@@ -305,21 +286,6 @@ public final class UInt256Operators
             out[i * 2 + 1] = h[v & 0x0F];
         }
         return new String(out);
-    }
-
-    private static byte[] hexToBytes(String hex)
-    {
-        int len = hex.length();
-        byte[] out = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            int hi = Character.digit(hex.charAt(i), 16);
-            int lo = Character.digit(hex.charAt(i + 1), 16);
-            if (hi < 0 || lo < 0) {
-                throw new TrinoException(INVALID_CAST_ARGUMENT, "Invalid hex string for UINT256");
-            }
-            out[i / 2] = (byte) ((hi << 4) | lo);
-        }
-        return out;
     }
 
     private static byte[] toFixedUint256(BigInteger value)

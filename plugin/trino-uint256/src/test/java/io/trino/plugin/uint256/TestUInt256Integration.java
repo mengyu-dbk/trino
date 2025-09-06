@@ -45,12 +45,12 @@ public class TestUInt256Integration
     @Test
     public void testCreateTableInsertAndQuery()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_test (id INTEGER, v uint256)");
+        assertUpdate("CREATE TABLE memory.default.uint256_test (id INTEGER, v UINT256)");
 
         // insert 3 rows: 1, 2, NULL
         assertUpdate("INSERT INTO memory.default.uint256_test VALUES " +
-                "(1, CAST(from_hex('01') AS uint256))," +
-                "(2, CAST(from_hex('02') AS uint256))," +
+                "(1, CAST(from_hex('01') AS UINT256))," +
+                "(2, CAST(from_hex('02') AS UINT256))," +
                 "(3, NULL)", 3);
 
         // basic select and order by
@@ -66,36 +66,36 @@ public class TestUInt256Integration
     @Test
     public void testAddition()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_add (id INTEGER, v uint256)");
+        assertUpdate("CREATE TABLE memory.default.uint256_add (id INTEGER, v UINT256)");
         assertUpdate("INSERT INTO memory.default.uint256_add VALUES " +
-                "(1, CAST(from_hex('01') AS uint256))," +
-                "(2, CAST(from_hex('FF') AS uint256))," +
+                "(1, CAST(from_hex('01') AS UINT256))," +
+                "(2, CAST(from_hex('FF') AS UINT256))," +
                 // max value (32 bytes of FF)
-                "(3, CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS uint256))", 3);
+                "(3, CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256))", 3);
 
         // v + 01
         assertQueryOrdered(
-                "SELECT id, to_hex(CAST(v + CAST(from_hex('01') AS uint256) AS varbinary)) FROM memory.default.uint256_add WHERE id IN (1,2) ORDER BY id",
+                "SELECT id, to_hex(CAST(v + CAST(from_hex('01') AS UINT256) AS varbinary)) FROM memory.default.uint256_add WHERE id IN (1,2) ORDER BY id",
                 // 0x01 + 0x01 = 0x02; 0xFF + 0x01 = 0x0100 (32 bytes, carry)
                 "VALUES (1, '0000000000000000000000000000000000000000000000000000000000000002')," +
                         "(2, '0000000000000000000000000000000000000000000000000000000000000100')");
 
         // overflow: max + 01 -> error
         assertQueryFails(
-                "SELECT to_hex(CAST(v + CAST(from_hex('01') AS uint256) AS varbinary)) FROM memory.default.uint256_add WHERE id = 3",
+                "SELECT to_hex(CAST(v + CAST(from_hex('01') AS UINT256) AS varbinary)) FROM memory.default.uint256_add WHERE id = 3",
                 ".*uint256 addition overflow.*");
 
         // null propagation
         assertUpdate("INSERT INTO memory.default.uint256_add VALUES (4, NULL)", 1);
         assertQueryReturnsEmptyResult(
-                "SELECT to_hex(CAST(v + CAST(from_hex('01') AS uint256) AS varbinary)) FROM memory.default.uint256_add WHERE id = 4 AND v IS NOT NULL");
+                "SELECT to_hex(CAST(v + CAST(from_hex('01') AS UINT256) AS varbinary)) FROM memory.default.uint256_add WHERE id = 4 AND v IS NOT NULL");
     }
 
     @Test
     public void testBigintToUint256CastAndInsert()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_bigint (id INTEGER, v uint256)");
-        assertUpdate("INSERT INTO memory.default.uint256_bigint VALUES (1, CAST(CAST(123456789 AS BIGINT) AS uint256)), (2, uint256(CAST(987654321 AS BIGINT)))", 2);
+        assertUpdate("CREATE TABLE memory.default.uint256_bigint (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_bigint VALUES (1, CAST(CAST(123456789 AS BIGINT) AS UINT256)), (2, uint256(CAST(987654321 AS BIGINT)))", 2);
 
         assertQueryOrdered(
                 "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_bigint ORDER BY id",
@@ -106,15 +106,15 @@ public class TestUInt256Integration
     @Test
     public void testPredicatesAndOrdering()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_pred (id INTEGER, v uint256)");
+        assertUpdate("CREATE TABLE memory.default.uint256_pred (id INTEGER, v UINT256)");
         assertUpdate("INSERT INTO memory.default.uint256_pred VALUES " +
-                "(1, CAST(from_hex('10') AS uint256))," +
-                "(2, CAST(from_hex('0F') AS uint256))," +
-                "(3, CAST(from_hex('0100') AS uint256))", 3);
+                "(1, CAST(from_hex('10') AS UINT256))," +
+                "(2, CAST(from_hex('0F') AS UINT256))," +
+                "(3, CAST(from_hex('0100') AS UINT256))", 3);
 
         // WHERE and ORDER BY
         assertQueryOrdered(
-                "SELECT to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_pred WHERE v > CAST(from_hex('0F') AS uint256) ORDER BY v",
+                "SELECT to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_pred WHERE v > CAST(from_hex('0F') AS UINT256) ORDER BY v",
                 "VALUES ('0000000000000000000000000000000000000000000000000000000000000010')," +
                         "('0000000000000000000000000000000000000000000000000000000000000100')");
     }
@@ -124,25 +124,28 @@ public class TestUInt256Integration
     {
         // 正向：VARCHAR -> UINT256（含0x前缀、大小写、奇数字符自动补0）
         assertQuery(
-                "SELECT to_hex(CAST(CAST('0x01' AS uint256) AS varbinary))",
+                "SELECT to_hex(CAST(CAST('1' AS UINT256) AS varbinary))",
                 "VALUES '0000000000000000000000000000000000000000000000000000000000000001'");
         assertQuery(
-                "SELECT to_hex(CAST(CAST('ff' AS uint256) AS varbinary))",
-                "VALUES '00000000000000000000000000000000000000000000000000000000000000ff'");
+                "SELECT to_hex(CAST(CAST('255' AS UINT256) AS varbinary))",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
         assertQuery(
-                "SELECT to_hex(CAST(CAST('F' AS uint256) AS varbinary))",
-                "VALUES '000000000000000000000000000000000000000000000000000000000000000f'");
+                "SELECT to_hex(CAST(CAST('15' AS UINT256) AS varbinary))",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000000F'");
+        // 错误：非法字符
+        assertQueryFails("SELECT CAST('0xz1' AS UINT256)", ".*Invalid UINT256 value:.*");
+        // 错误：数字过大
+        String longHex = "9".repeat(100);
+        assertQueryFails("SELECT CAST('" + longHex + "' AS UINT256)", ".*uint256 value out of range.*");
 
+        // 错误：负数
+        assertQueryFails("SELECT CAST('-1' AS UINT256)", ".*uint256 value out of range*");
+        // 错误：空字符串
+        assertQueryFails("SELECT CAST('' AS UINT256)", ".*Invalid UINT256 value:.*");
         // 反向：UINT256 -> VARCHAR（固定64位小写hex）
         assertQuery(
-                "SELECT CAST(CAST(from_hex('0A0B') AS uint256) AS VARCHAR)",
-                "VALUES '0000000000000000000000000000000000000000000000000000000000000a0b'");
-
-        // 错误：非法字符
-        assertQueryFails("SELECT CAST('0xz1' AS uint256)", ".*Invalid hex digit.*");
-        // 错误：长度>64
-        String longHex = "F".repeat(65);
-        assertQueryFails("SELECT CAST('" + longHex + "' AS uint256)", ".*Invalid UINT256 hex length.*");
+                "SELECT CAST(CAST(from_hex('0A0B') AS UINT256) AS VARCHAR)",
+                "VALUES '2571'");
     }
 
     @Test
@@ -150,29 +153,29 @@ public class TestUInt256Integration
     {
         // subtraction 正常
         assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('0100') AS uint256) - CAST(from_hex('01') AS uint256) AS varbinary))",
+                "SELECT to_hex(CAST(CAST(from_hex('0100') AS UINT256) - CAST(from_hex('01') AS UINT256) AS varbinary))",
                 "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
         // subtraction 下溢
         assertQueryFails(
-                "SELECT CAST(from_hex('00') AS uint256) - CAST(from_hex('01') AS uint256)",
+                "SELECT CAST(from_hex('00') AS UINT256) - CAST(from_hex('01') AS UINT256)",
                 ".*uint256 subtraction underflow.*");
 
         // multiply 正常
         assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('02') AS uint256) * CAST(from_hex('03') AS uint256) AS varbinary))",
+                "SELECT to_hex(CAST(CAST(from_hex('02') AS UINT256) * CAST(from_hex('03') AS UINT256) AS varbinary))",
                 "VALUES '0000000000000000000000000000000000000000000000000000000000000006'");
         // multiply 上溢
         assertQueryFails(
-                "SELECT CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS uint256) * CAST(from_hex('02') AS uint256)",
+                "SELECT CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256) * CAST(from_hex('02') AS UINT256)",
                 ".*uint256 multiplication overflow.*");
 
         // divide 正常
         assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('10') AS uint256) / CAST(from_hex('04') AS uint256) AS varbinary))",
+                "SELECT to_hex(CAST(CAST(from_hex('10') AS UINT256) / CAST(from_hex('04') AS UINT256) AS varbinary))",
                 "VALUES '0000000000000000000000000000000000000000000000000000000000000004'");
         // divide by zero
         assertQueryFails(
-                "SELECT CAST(from_hex('10') AS uint256) / CAST(from_hex('00') AS uint256)",
+                "SELECT CAST(from_hex('10') AS UINT256) / CAST(from_hex('00') AS UINT256)",
                 ".*Division by zero.*");
     }
 
@@ -181,19 +184,19 @@ public class TestUInt256Integration
     {
         // and
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_and(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "SELECT to_hex(CAST(bitwise_and(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
                 "VALUES '0000000000000000000000000000000000000000000000000000000000000000'");
         // or
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_or(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "SELECT to_hex(CAST(bitwise_or(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
                 "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
         // xor
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_xor(CAST(from_hex('F0') AS uint256), CAST(from_hex('0F') AS uint256)) AS varbinary))",
+                "SELECT to_hex(CAST(bitwise_xor(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
                 "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
         // not
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_not(CAST(from_hex('00FF') AS uint256)) AS varbinary))",
+                "SELECT to_hex(CAST(bitwise_not(CAST(from_hex('00FF') AS UINT256)) AS varbinary))",
                 // ~00FF => leading FFs then FF00
                 "VALUES 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00'");
     }

@@ -4,12 +4,12 @@
 提供在 Trino 中使用 256 位无符号整数（uint256）的类型与函数。
 
 ## 特性
-- 类型名称: `uint256`
-- 底层表示: `VARBINARY()`（默认规范化为大端32字节）(如果有性能/存储放大问题，后面可以规划到使用char(32) 来实现）
+- 类型名称: `UINT256`
+- 底层表示: `VARBINARY()`（默认规范化为大端32字节，地址最高的字节存放最小的几位数）(如果有性能/存储放大问题，后面可以规划到使用char(32) 来实现）
 - 支持能力:
   - 比较、排序、读写
   - 算术：加减乘除（`+`, `-`, `*`, `/`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
-  - CAST：`varbinary ↔ uint256` `bigint -> uint256`
+  - CAST：`varbinary ↔ uint256`, `varchar ↔ uint256`, `bigint -> uint256`
   - 便捷构造函数：`uint256(varbinary)`
 - 空值支持: 与 SQL 一致
 - 数值范围: 0 .. 2^256 - 1
@@ -88,6 +88,72 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   5. NULL 传播
 
 对应实现见：`src/test/java/io/trino/plugin/uint256/TestUInt256Integration.java`
+
+## 测试场景清单（当前代码已有覆盖）
+
+### 单元测试（TestUInt256Query）
+- 类型基本属性：displayName、可比/可排序、JavaType
+- Block 读写：写入32字节、读取验证；appendTo 复制验证
+- Null 处理：单值 null、混合多值含 null 的读取
+- 多值写入：写入3个值逐一读取验证
+- 类型签名：base/参数为空
+- 边界值：全0、全FF（2^256-1）
+- 可变长度写入：短于32字节、长于32字节的存取行为
+- BlockBuilder 容量：按容量批量写入与读取
+- bigint → uint256：正数、0、负数报错（函数与 CAST 运算符）
+- varchar ↔ uint256（十进制）：
+  - 无效空串报错
+  - '15' 成功并回转为十进制字符串
+  - 超范围十进制报错
+  - 非法字符报错
+- 算术：
+  - 加法：0+0、1+1、0xFF+1 进位、大数相加
+  - 加法溢出：max+1 报错
+  - 多字节进位用例
+  - 减法：0x0100-0x01 成功，下溢报错
+  - 乘法：2*3 成功，上溢报错
+  - 除法：0x10/0x04 成功，除0报错
+- 位运算：AND、OR、XOR、NOT（与 to_hex 验证）
+
+### 集成测试（TestUInt256Integration）
+- DDL/插入/查询：
+  - 建表 (UINT256 列)、插入 from_hex(...)→UINT256、含 NULL
+  - 基本查询与 ORDER BY；NULL 计数
+- 算术（SQL 层）：
+  - 按列 + 常量（结果 to_hex 校验）
+  - 溢出报错；NULL 传播
+- BIGINT → UINT256（两种方式）：`CAST(bigint AS UINT256)` 与 `uint256(bigint)` 插入与查询
+- 谓词/排序：`WHERE v > const` 且 `ORDER BY v`
+- VARCHAR ↔ UINT256（十进制字符串）：
+  - 正向：'1'、'255'、'15' → UINT256 并转 varbinary 验证
+  - 反向：UINT256 → VARCHAR 十进制（如 from_hex('0A0B') → '2571'）
+  - 错误：非法字符、超范围、负数、空字符串
+- 其他算术：减法/乘法/除法（正常与错误场景）
+- 位运算（SQL 函数）：bitwise_and / bitwise_or / bitwise_xor / bitwise_not（to_hex 验证）
+
+## 覆盖进度（c完成/未完成/ur未二次确认）
+
+- [c] 类型基本属性/类型签名
+- [c] Block 读写、appendTo、容量、多值
+- [x] 边界值（0、max=2^256-1）
+- [x] CAST(varbinary ↔ uint256)
+- [x] CAST(varchar ↔ uint256)（十进制）
+- [x] CAST(bigint → uint256)
+- [x] 算术（+、-、*、/）含溢出/下溢/除零错误
+- [x] 位运算（AND/OR/XOR/NOT）
+- [x] SQL 层：DDL、插入、查询、排序、谓词
+- [x] NULL 传播（加法）
+- [ ] NULL 传播覆盖更多运算（减/乘/除/位运算）
+- [ ] VARCHAR 解析的健壮性：
+  - 前后空白裁剪（如 ' 15 '）
+  - 前导'+'号（如 '+15'）
+  - 前导零（如 '00015' 的等价性明确验证）
+- [ ] 十进制边界值：'0' 与 2^256-1 的十进制字符串正确性验证
+- [ ] 更丰富的比较谓词：=、<、BETWEEN、IN 等
+- [ ] 分组/聚合/去重：GROUP BY、ORDER BY 多键、DISTINCT
+- [ ] 连接键：JOIN ON UINT256 的匹配/去重
+
+> 说明：上述“未完成”项为建议补充的测试方向，不代表产品功能缺失；现有实现已支持相应能力（除明确未实现的聚合/函数外），建议通过新增测试用例增强回归覆盖度。
 
 ## 注意事项
 - 规范化：通过 `CAST(... AS uint256)` 或 `uint256(...)` 写入时会左侧 0 填充至 32 字节（大端），保证比较/排序语义正确。
