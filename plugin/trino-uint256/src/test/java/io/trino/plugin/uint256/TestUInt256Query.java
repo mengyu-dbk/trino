@@ -21,6 +21,7 @@ import io.trino.spi.block.BlockBuilder;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TestUInt256Query
 {
@@ -242,5 +243,52 @@ public class TestUInt256Query
 
         Slice readSlice2 = uint256Type.getSlice(block, 2);
         assertThat(readSlice2.getByte(0)).isEqualTo((byte) 2);
+    }
+
+    @Test
+    public void testBigintToUint256()
+    {
+        // 测试正数
+        long value = 123456789L;
+        Slice result = UInt256Operators.uint256(value);
+        byte[] bytes = result.getBytes();
+        assertThat(bytes.length).isEqualTo(32);
+        // 高24字节为0
+        for (int i = 0; i < 24; i++) {
+            assertThat(bytes[i]).isEqualTo((byte) 0);
+        }
+        // 低8字节为bigint内容
+        long reconstructed = 0;
+        for (int i = 24; i < 32; i++) {
+            reconstructed = (reconstructed << 8) | (bytes[i] & 0xFF);
+        }
+        assertThat(reconstructed).isEqualTo(value);
+
+        // 测试0
+        result = UInt256Operators.uint256(0L);
+        bytes = result.getBytes();
+        for (byte b : bytes) {
+            assertThat(b).isEqualTo((byte) 0);
+        }
+
+        // 测试负数（uint256不支持负数，结果为抛出错误）
+        assertThatThrownBy(() -> UInt256Operators.uint256(-1L))
+                .isInstanceOf(io.trino.spi.TrinoException.class)
+                .hasMessageContaining("Cannot cast negative BIGINT value -1 to UINT256");
+    }
+
+    @Test
+    public void testCastBigintToUint256()
+    {
+        // 直接调用CAST
+        long value = 987654321L;
+        Slice result = UInt256Operators.castFromBigintToUint256(value);
+        byte[] bytes = result.getBytes();
+        assertThat(bytes.length).isEqualTo(32);
+        long reconstructed = 0;
+        for (int i = 24; i < 32; i++) {
+            reconstructed = (reconstructed << 8) | (bytes[i] & 0xFF);
+        }
+        assertThat(reconstructed).isEqualTo(value);
     }
 }
