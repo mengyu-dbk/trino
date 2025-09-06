@@ -16,6 +16,7 @@ package io.trino.plugin.uint256;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.trino.plugin.uint256.type.UInt256Type;
+import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import org.junit.jupiter.api.Test;
@@ -290,5 +291,177 @@ public class TestUInt256Query
             reconstructed = (reconstructed << 8) | (bytes[i] & 0xFF);
         }
         assertThat(reconstructed).isEqualTo(value);
+    }
+    /*
+    @Test
+    public void testVarcharCastRoundtrip()
+    {
+        // '' -> 0
+        Slice zero = UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice(""));
+        assertThat(zero.length()).isEqualTo(32);
+        for (byte b : zero.getBytes()) {
+            assertThat(b).isEqualTo((byte) 0);
+        }
+        // '0x0f' -> 0x0f
+        Slice v = UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("0x0f"));
+        String hex = UInt256Operators.castFromUint256ToVarchar(v).toStringUtf8();
+        assertThat(hex).endsWith("0f");
+        assertThat(hex.length()).isEqualTo(64);
+
+        // 长度校验
+        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("F".repeat(65))))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Invalid UINT256 hex length");
+        // 非法字符
+        assertThatThrownBy(() -> UInt256Operators.castFromVarcharToUint256(Slices.utf8Slice("0xz1")))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Invalid hex digit");
+    }
+    */
+    @Test
+    public void testAddition()
+    {
+        // Test: 0 + 0 = 0
+        Slice zero = uint256FromHex("0");
+        Slice result = UInt256Operators.add(zero, zero);
+        assertThat("0000000000000000000000000000000000000000000000000000000000000000").isEqualTo(toHex(result));
+
+        // Test: 1 + 1 = 2
+        Slice one = uint256FromHex("1");
+        Slice two = uint256FromHex("2");
+        result = UInt256Operators.add(one, one);
+        assertThat(toHex(two)).isEqualTo(toHex(result));
+
+        // Test: 255 + 1 = 256 (carry propagation)
+        Slice ff = uint256FromHex("ff");
+        Slice hundred = uint256FromHex("100");
+        result = UInt256Operators.add(ff, one);
+        assertThat(toHex(hundred)).isEqualTo(toHex(result));
+
+        // Test: large numbers
+        Slice large1 = uint256FromHex("123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        Slice large2 = uint256FromHex("fedcba9876543210fedcba9876543210fedcba9876543210fedcba987654321");
+        result = UInt256Operators.add(large1, large2);
+        // Expected: 1111111111111110111111111111111011111111111111101111111111111110
+        assertThat(toHex(result)).isEqualTo("1111111111111110111111111111111011111111111111101111111111111110");
+    }
+
+    /*
+    @Test
+    public void testAdditionOverflow()
+    {
+        // Test overflow: MAX_UINT256 + 1
+        Slice maxUint256 = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice one = uint256FromHex("1");
+
+        TrinoException exception = assertThrows(TrinoException.class,
+                () -> UInt256Operators.add(maxUint256, one));
+        assertEquals(NUMERIC_VALUE_OUT_OF_RANGE, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("uint256 addition overflow"));
+    }
+
+    @Test
+    public void testAdditionCarryPropagation()
+    {
+        // Test multiple byte carry propagation
+        Slice value1 = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00");
+        Slice value2 = uint256FromHex("ff");
+        Slice expected = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+
+        Slice result = UInt256Operators.add(value1, value2);
+        assertEquals(toHex(expected), toHex(result));
+    }
+    */
+
+    private Slice uint256FromHex(String hex)
+    {
+        // Pad to 64 characters (32 bytes)
+        String padded = String.format("%64s", hex).replace(' ', '0');
+        byte[] bytes = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            int index = i * 2;
+            int value = Integer.parseInt(padded.substring(index, index + 2), 16);
+            bytes[i] = (byte) value;
+        }
+        return Slices.wrappedBuffer(bytes);
+    }
+
+    private String toHex(Slice slice)
+    {
+        return UInt256Operators.castFromUint256ToVarchar(slice).toStringUtf8();
+    }
+
+    @Test
+    public void testArithmeticOps()
+    {
+        // a = 0x0100
+        byte[] aBytes = new byte[32];
+        aBytes[30] = 0x01;
+        aBytes[31] = 0x00;
+        Slice a = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(aBytes));
+        //b = 0x01
+        byte[] bBytes = new byte[32];
+        bBytes[30] = 0x00;
+        bBytes[31] = 0x01;
+        Slice b = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(bBytes));
+
+        // subtract: 0x0100 - 0x01 = 0x00ff
+        Slice sub = UInt256Operators.subtract(a, b);
+        String subHex = UInt256Operators.castFromUint256ToVarchar(sub).toStringUtf8();
+        assertThat(subHex).endsWith("00ff");
+
+        // multiply: 0x02 * 0x03 = 0x06
+        Slice m2 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x02}));
+        Slice m3 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x03}));
+        Slice mul = UInt256Operators.multiply(m2, m3);
+        assertThat(UInt256Operators.castFromUint256ToVarchar(mul).toStringUtf8()).endsWith("0006");
+
+        // multiply overflow: max * 2
+        byte[] max = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            max[i] = (byte) 0xFF;
+        }
+        Slice vmax = Slices.wrappedBuffer(max);
+        assertThatThrownBy(() -> UInt256Operators.multiply(vmax, m2))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("multiplication overflow");
+
+        // divide: 0x10 / 0x04 = 0x04
+        Slice d10 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x10}));
+        Slice d4 = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x04}));
+        Slice div = UInt256Operators.divide(d10, d4);
+        assertThat(UInt256Operators.castFromUint256ToVarchar(div).toStringUtf8()).endsWith("0004");
+
+        // divide by zero
+        Slice zeroU = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x00}));
+        assertThatThrownBy(() -> UInt256Operators.divide(d10, zeroU))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+    }
+
+    @Test
+    public void testBitwiseOps()
+    {
+        Slice fzero = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer((byte) 0xF0));
+        Slice zerof = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x0F}));
+
+        // and => 0x00
+        Slice and = UInt256Operators.bitwiseAnd(fzero, zerof);
+        assertThat(UInt256Operators.castFromUint256ToVarchar(and).toStringUtf8()).endsWith("0000");
+
+        // or => 0xFF
+        Slice or = UInt256Operators.bitwiseOr(fzero, zerof);
+        assertThat(UInt256Operators.castFromUint256ToVarchar(or).toStringUtf8()).endsWith("00ff");
+
+        // xor => 0xFF
+        Slice xor = UInt256Operators.bitwiseXor(fzero, zerof);
+        assertThat(UInt256Operators.castFromUint256ToVarchar(xor).toStringUtf8()).endsWith("00ff");
+
+        // not(~0x00ff)
+        Slice v00ff = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[] {0x00, (byte) 0xFF}));
+        Slice not = UInt256Operators.bitwiseNot(v00ff);
+        String notHex = UInt256Operators.castFromUint256ToVarchar(not).toStringUtf8();
+
+        assertThat(notHex).isEqualTo("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00");
     }
 }

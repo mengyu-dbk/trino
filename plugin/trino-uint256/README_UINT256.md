@@ -8,7 +8,7 @@
 - 底层表示: `VARBINARY()`（默认规范化为大端32字节）(如果有性能/存储放大问题，后面可以规划到使用char(32) 来实现）
 - 支持能力:
   - 比较、排序、读写
-  - 算术：加法（`+`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
+  - 算术：加减乘除（`+`, `-`, `*`, `/`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
   - CAST：`varbinary ↔ uint256` `bigint -> uint256`
   - 便捷构造函数：`uint256(varbinary)`
 - 空值支持: 与 SQL 一致
