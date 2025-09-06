@@ -14,8 +14,11 @@
 package io.trino.plugin.uint256;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import io.trino.spi.Plugin;
 import io.trino.spi.type.Type;
+
+import java.util.Set;
 
 import static io.trino.plugin.uint256.type.UInt256Type.UINT256;
 
@@ -27,5 +30,12 @@ public final class UInt256Plugin
     {
         // 全局注册 uint256 类型
         return ImmutableList.of(UINT256);
+    }
+
+    @Override
+    public Set<Class<?>> getFunctions()
+    {
+        // 注册uint256的算术与CAST函数
+        return ImmutableSet.of(UInt256Operators.class);
     }
 }
