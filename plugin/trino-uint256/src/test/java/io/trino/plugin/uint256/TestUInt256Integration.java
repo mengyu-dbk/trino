@@ -92,6 +92,18 @@ public class TestUInt256Integration
     }
 
     @Test
+    public void testBigintToUint256CastAndInsert()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_bigint (id INTEGER, v uint256)");
+        assertUpdate("INSERT INTO memory.default.uint256_bigint VALUES (1, CAST(CAST(123456789 AS BIGINT) AS uint256)), (2, uint256(CAST(987654321 AS BIGINT)))", 2);
+
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_bigint ORDER BY id",
+                "VALUES (1, '00000000000000000000000000000000000000000000000000000000075BCD15')," +
+                "(2, '000000000000000000000000000000000000000000000000000000003ADE68B1')");
+    }
+
+    @Test
     public void testPredicatesAndOrdering()
     {
         assertUpdate("CREATE TABLE memory.default.uint256_pred (id INTEGER, v uint256)");
