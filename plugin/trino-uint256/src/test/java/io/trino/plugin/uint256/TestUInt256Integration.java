@@ -16,8 +16,8 @@ package io.trino.plugin.uint256;
 import com.google.common.collect.ImmutableMap;
 import io.trino.plugin.memory.MemoryPlugin;
 import io.trino.testing.AbstractTestQueryFramework;
-import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
+import io.trino.testing.StandaloneQueryRunner;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.testing.TestingSession.testSessionBuilder;
@@ -27,11 +27,9 @@ public class TestUInt256Integration
 {
     @Override
     protected QueryRunner createQueryRunner()
-            throws Exception
     {
-        DistributedQueryRunner runner = DistributedQueryRunner.builder(
-                        testSessionBuilder().setCatalog("memory").setSchema("default").build())
-                .build();
+        StandaloneQueryRunner runner = new StandaloneQueryRunner(
+                        testSessionBuilder().setCatalog("memory").setSchema("default").build());
 
         // install memory connector and create catalog
         runner.installPlugin(new MemoryPlugin());

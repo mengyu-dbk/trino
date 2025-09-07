@@ -15,6 +15,7 @@ package io.trino.plugin.uint256;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import io.trino.plugin.uint256.aggregation.UInt256SumAggregation;
 import io.trino.spi.Plugin;
 import io.trino.spi.type.Type;
 
@@ -35,7 +36,9 @@ public final class UInt256Plugin
     @Override
     public Set<Class<?>> getFunctions()
     {
-        // 注册uint256的算术与CAST函数
-        return ImmutableSet.of(UInt256Operators.class);
+        // 注册uint256的算术、CAST和聚合函数
+        return ImmutableSet.of(
+                UInt256Operators.class,
+                UInt256SumAggregation.class); //, UInt256AverageAggregation.class
     }
 }
