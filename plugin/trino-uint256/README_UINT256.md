@@ -11,6 +11,7 @@
   - 算术：加减乘除（`+`, `-`, `*`, `/`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
   - CAST：`varbinary ↔ uint256`, `varchar ↔ uint256`, `bigint -> uint256`
   - 便捷构造函数：`uint256(varbinary)`
+  - 位运算：AND、OR、XOR、NOT，左移右移。
 - 空值支持: 与 SQL 一致
 - 数值范围: 0 .. 2^256 - 1
 

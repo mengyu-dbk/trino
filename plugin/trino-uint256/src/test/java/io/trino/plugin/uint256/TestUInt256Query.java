@@ -584,4 +584,98 @@ public class TestUInt256Query
     {
         return new BigInteger(1, bytes).toString(16);
     }
+
+    @Test
+    public void testArithmeticWithBigint()
+    {
+        // uint256 + bigint
+        Slice five = uint256FromHex("5");
+        Slice res = UInt256Operators.add(five, 3L);
+        assertThat(toDecimal(res)).isEqualTo("8");
+
+        // bigint + uint256
+        res = UInt256Operators.add(7L, uint256FromHex("6"));
+        assertThat(toDecimal(res)).isEqualTo("13");
+
+        // negative bigint should fail for add/subtract/multiply/divide where applicable
+        assertThatThrownBy(() -> UInt256Operators.add(five, -1L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot add UINT256 with negative INTEGER value");
+
+        assertThatThrownBy(() -> UInt256Operators.subtract(five, -1L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot subtract UINT256 with negative INTEGER value");
+
+        assertThatThrownBy(() -> UInt256Operators.multiply(five, -2L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot multiply UINT256 with negative INTEGER value");
+
+        // uint256 - bigint
+        Slice ten = uint256FromHex("a"); // 10
+        res = UInt256Operators.subtract(ten, 3L);
+        assertThat(toDecimal(res)).isEqualTo("7");
+
+        // bigint - uint256
+        res = UInt256Operators.subtract(20L, uint256FromHex("5"));
+        assertThat(toDecimal(res)).isEqualTo("15");
+
+        // uint256 * bigint
+        res = UInt256Operators.multiply(uint256FromHex("3"), 4L);
+        assertThat(toDecimal(res)).isEqualTo("12");
+
+        // bigint * uint256
+        res = UInt256Operators.multiply(7L, uint256FromHex("2"));
+        assertThat(toDecimal(res)).isEqualTo("14");
+
+        // multiply overflow with bigint
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        assertThatThrownBy(() -> UInt256Operators.multiply(max, 2L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("multiplication overflow");
+
+        // uint256 / bigint
+        res = UInt256Operators.divide(uint256FromHex("14"), 4L); // 20 / 4 = 5
+        assertThat(toDecimal(res)).isEqualTo("5");
+
+        // bigint / uint256
+        res = UInt256Operators.divide(100L, uint256FromHex("4"));
+        assertThat(toDecimal(res)).isEqualTo("25");
+
+        // divide by zero (bigint)
+        assertThatThrownBy(() -> UInt256Operators.divide(uint256FromHex("10"), 0L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+    }
+
+    @Test
+    public void testArithmeticWithDouble()
+    {
+        // uint256 + double
+        Slice five = uint256FromHex("5");
+        Slice res = UInt256Operators.add(five, 2.0);
+        assertThat(toDecimal(res)).isEqualTo("7");
+
+        // double + uint256
+        res = UInt256Operators.add(3.0, uint256FromHex("4"));
+        assertThat(toDecimal(res)).isEqualTo("7");
+
+        // non-integer double should fail
+        assertThatThrownBy(() -> UInt256Operators.add(five, 1.5))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast non-integer DOUBLE value");
+
+        // negative double should fail
+        assertThatThrownBy(() -> UInt256Operators.add(five, -1.0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast negative DOUBLE value");
+
+        // multiply and divide with doubles (integer-valued doubles)
+        res = UInt256Operators.multiply(uint256FromHex("6"), 2.0);
+        assertThat(toDecimal(res)).isEqualTo("12");
+
+        // division by zero (double)
+        assertThatThrownBy(() -> UInt256Operators.divide(uint256FromHex("10"), 0.0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+    }
 }
