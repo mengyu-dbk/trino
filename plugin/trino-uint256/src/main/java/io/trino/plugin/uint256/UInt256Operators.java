@@ -177,7 +177,7 @@ public final class UInt256Operators
             throw new TrinoException(INVALID_CAST_ARGUMENT,
                 format("Cannot multiply UINT256 with negative INTEGER value %s", right));
         }
-        return multiply(left, castFromIntegerToUint256(right));
+        return multiply(left, castFromBigintToUint256(right));
     }
 
     // integer * uint256 -> uint256 (implicit conversion, overflow error)
@@ -502,7 +502,7 @@ public final class UInt256Operators
     public static long getLong(Slice value)
     {
         byte[] bytes = ensureUint256(value);
-        return new BigInteger(1, bytes).longValue();
+        return (new BigInteger(1, bytes)).longValue();
     }
 
     private static String toHex(byte[] bytes)

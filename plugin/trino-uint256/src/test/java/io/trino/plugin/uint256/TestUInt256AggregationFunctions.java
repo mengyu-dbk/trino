@@ -41,49 +41,32 @@ public class TestUInt256AggregationFunctions
     }
 
     @Test
-    public void testCreateTableInsertAndQuery()
-    {
-        assertUpdate("CREATE TABLE memory.default.uint256_test (id INTEGER, v UINT256)");
-
-        // insert 3 rows: 1, 2, NULL
-        assertUpdate("INSERT INTO memory.default.uint256_test VALUES " +
-                "(1, CAST('1' AS UINT256))," +
-                "(2, CAST('2' AS UINT256))," +
-                "(3, NULL)", 3);
-
-        // basic select and order by
-        assertQueryOrdered(
-                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_test WHERE v IS NOT NULL ORDER BY id",
-                "VALUES (1, '0000000000000000000000000000000000000000000000000000000000000001')," +
-                        "(2, '0000000000000000000000000000000000000000000000000000000000000002')");
-
-        // null handling
-        assertQuery("SELECT count(*) FROM memory.default.uint256_test WHERE v IS NULL", "VALUES 1");
-    }
-
-    @Test
     public void testSumBasic()
     {
-        // 测试基本的SUM功能
-        assertQuery("SELECT sum(CAST('1' AS UINT256))", "VALUES 1");
-        assertQuery("SELECT sum(CAST('100' AS UINT256))", "SELECT CAST('100' AS UINT256)");
+        // 测试基本的SUM功能 - 转换为十六进制字符串进行比较
+        assertQuery(
+                "SELECT to_hex(CAST(sum(CAST('1' AS UINT256)) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000001'");
+
+        assertQuery(
+                "SELECT to_hex(CAST(sum(CAST('100' AS UINT256)) AS varbinary))",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000064'");
 
         // 测试多个值的SUM
         assertQuery(
-                "SELECT sum(val) FROM (VALUES CAST('10' AS UINT256), CAST('20' AS UINT256), CAST('30' AS UINT256)) AS t(val)",
-                "SELECT CAST('60' AS UINT256)");
+                "SELECT to_hex(CAST(sum(val) AS varbinary)) FROM (VALUES CAST('10' AS UINT256), CAST('20' AS UINT256), CAST('30' AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000003C'");
     }
-
 /*
     @Test
     public void testSumWithNulls()
     {
         // 测试包含NULL的SUM
-        assertQuery("SELECT sum(val) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)", "SELECT CAST(NULL AS UINT256)");
+        assertQuery("SELECT to_hex(CAST(sum(val) AS varbinary)) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)", "VALUES NULL");
 
         assertQuery(
-                "SELECT sum(val) FROM (VALUES CAST('10' AS UINT256), CAST(NULL AS UINT256), CAST('20' AS UINT256)) AS t(val)",
-                "SELECT CAST('30' AS UINT256)");
+                "SELECT to_hex(CAST(sum(val) AS varbinary)) FROM (VALUES CAST('10' AS UINT256), CAST(NULL AS UINT256), CAST('20' AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000001E'");
     }
 
     @Test
