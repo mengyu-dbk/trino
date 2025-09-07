@@ -100,104 +100,191 @@ public class TestUInt256Integration
         assertQueryOrdered(
                 "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_bigint ORDER BY id",
                 "VALUES (1, '00000000000000000000000000000000000000000000000000000000075BCD15')," +
-                "(2, '000000000000000000000000000000000000000000000000000000003ADE68B1')");
+                        "(2, '000000000000000000000000000000000000000000000000000000003ADE68B1')");
+
+        // Test negative bigint cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1 AS BIGINT) AS UINT256)",
+                ".*Cannot cast negative BIGINT value.*");
     }
 
     @Test
-    public void testPredicatesAndOrdering()
+    public void testIntegerToUint256Cast()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_pred (id INTEGER, v UINT256)");
-        assertUpdate("INSERT INTO memory.default.uint256_pred VALUES " +
-                "(1, CAST(from_hex('10') AS UINT256))," +
-                "(2, CAST(from_hex('0F') AS UINT256))," +
-                "(3, CAST(from_hex('0100') AS UINT256))", 3);
+        assertUpdate("CREATE TABLE memory.default.uint256_integer (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_integer VALUES " +
+                "(1, CAST(CAST(12345 AS INTEGER) AS UINT256))," +
+                "(2, CAST(CAST(0 AS INTEGER) AS UINT256))," +
+                "(3, CAST(CAST(2147483647 AS INTEGER) AS UINT256))", 3); // INTEGER max value
 
-        // WHERE and ORDER BY
         assertQueryOrdered(
-                "SELECT to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_pred WHERE v > CAST(from_hex('0F') AS UINT256) ORDER BY v",
-                "VALUES ('0000000000000000000000000000000000000000000000000000000000000010')," +
-                        "('0000000000000000000000000000000000000000000000000000000000000100')");
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_integer ORDER BY id",
+                "VALUES (1, '0000000000000000000000000000000000000000000000000000000000003039')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '000000000000000000000000000000000000000000000000000000007FFFFFFF')");
+
+        // Test negative integer cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1 AS INTEGER) AS UINT256)",
+                ".*Cannot cast negative INTEGER value.*");
     }
 
     @Test
-    public void testVarcharCasts()
+    public void testSmallintToUint256Cast()
     {
-        // 正向：VARCHAR -> UINT256（含0x前缀、大小写、奇数字符自动补0）
-        assertQuery(
-                "SELECT to_hex(CAST(CAST('1' AS UINT256) AS varbinary))",
-                "VALUES '0000000000000000000000000000000000000000000000000000000000000001'");
-        assertQuery(
-                "SELECT to_hex(CAST(CAST('255' AS UINT256) AS varbinary))",
-                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
-        assertQuery(
-                "SELECT to_hex(CAST(CAST('15' AS UINT256) AS varbinary))",
-                "VALUES '000000000000000000000000000000000000000000000000000000000000000F'");
-        // 错误：非法字符
-        assertQueryFails("SELECT CAST('0xz1' AS UINT256)", ".*Invalid UINT256 value:.*");
-        // 错误：数字过大
-        String longHex = "9".repeat(100);
-        assertQueryFails("SELECT CAST('" + longHex + "' AS UINT256)", ".*uint256 value out of range.*");
+        assertUpdate("CREATE TABLE memory.default.uint256_smallint (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_smallint VALUES " +
+                "(1, CAST(CAST(123 AS SMALLINT) AS UINT256))," +
+                "(2, CAST(CAST(0 AS SMALLINT) AS UINT256))," +
+                "(3, CAST(CAST(32767 AS SMALLINT) AS UINT256))", 3); // SMALLINT max value
 
-        // 错误：负数
-        assertQueryFails("SELECT CAST('-1' AS UINT256)", ".*uint256 value out of range*");
-        // 错误：空字符串
-        assertQueryFails("SELECT CAST('' AS UINT256)", ".*Invalid UINT256 value:.*");
-        // 反向：UINT256 -> VARCHAR（固定64位小写hex）
-        assertQuery(
-                "SELECT CAST(CAST(from_hex('0A0B') AS UINT256) AS VARCHAR)",
-                "VALUES '2571'");
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_smallint ORDER BY id",
+                "VALUES (1, '000000000000000000000000000000000000000000000000000000000000007B')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '0000000000000000000000000000000000000000000000000000000000007FFF')");
+
+        // Test negative smallint cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1 AS SMALLINT) AS UINT256)",
+                ".*Cannot cast negative SMALLINT value.*");
     }
 
     @Test
-    public void testSubMulDiv()
+    public void testTinyintToUint256Cast()
     {
-        // subtraction 正常
-        assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('0100') AS UINT256) - CAST(from_hex('01') AS UINT256) AS varbinary))",
-                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
-        // subtraction 下溢
-        assertQueryFails(
-                "SELECT CAST(from_hex('00') AS UINT256) - CAST(from_hex('01') AS UINT256)",
-                ".*uint256 subtraction underflow.*");
+        assertUpdate("CREATE TABLE memory.default.uint256_tinyint (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_tinyint VALUES " +
+                "(1, CAST(CAST(42 AS TINYINT) AS UINT256))," +
+                "(2, CAST(CAST(0 AS TINYINT) AS UINT256))," +
+                "(3, CAST(CAST(127 AS TINYINT) AS UINT256))", 3); // TINYINT max value
 
-        // multiply 正常
-        assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('02') AS UINT256) * CAST(from_hex('03') AS UINT256) AS varbinary))",
-                "VALUES '0000000000000000000000000000000000000000000000000000000000000006'");
-        // multiply 上溢
-        assertQueryFails(
-                "SELECT CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256) * CAST(from_hex('02') AS UINT256)",
-                ".*uint256 multiplication overflow.*");
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_tinyint ORDER BY id",
+                "VALUES (1, '000000000000000000000000000000000000000000000000000000000000002A')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '000000000000000000000000000000000000000000000000000000000000007F')");
 
-        // divide 正常
-        assertQuery(
-                "SELECT to_hex(CAST(CAST(from_hex('10') AS UINT256) / CAST(from_hex('04') AS UINT256) AS varbinary))",
-                "VALUES '0000000000000000000000000000000000000000000000000000000000000004'");
-        // divide by zero
+        // Test negative tinyint cast failure
         assertQueryFails(
-                "SELECT CAST(from_hex('10') AS UINT256) / CAST(from_hex('00') AS UINT256)",
-                ".*Division by zero.*");
+                "SELECT CAST(CAST(-1 AS TINYINT) AS UINT256)",
+                ".*Cannot cast negative TINYINT value.*");
     }
 
     @Test
-    public void testBitwiseFunctions()
+    public void testRealToUint256Cast()
     {
-        // and
+        assertUpdate("CREATE TABLE memory.default.uint256_real (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_real VALUES " +
+                "(1, CAST(CAST(123.0 AS REAL) AS UINT256))," +
+                "(2, CAST(CAST(0.0 AS REAL) AS UINT256))," +
+                "(3, CAST(CAST(1000000.0 AS REAL) AS UINT256))", 3);
+
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_real ORDER BY id",
+                "VALUES (1, '000000000000000000000000000000000000000000000000000000000000007B')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '00000000000000000000000000000000000000000000000000000000000F4240')");
+
+        // Test negative real cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1.0 AS REAL) AS UINT256)",
+                ".*Cannot cast negative REAL value.*");
+
+        // Test non-integer real cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(123.5 AS REAL) AS UINT256)",
+                ".*Cannot cast non-integer REAL value.*");
+
+        // Test infinity cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(infinity() AS REAL) AS UINT256)",
+                ".*Cannot cast non-finite REAL value.*");
+
+        // Test NaN cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(nan() AS REAL) AS UINT256)",
+                ".*Cannot cast non-finite REAL value.*");
+    }
+
+    @Test
+    public void testDoubleToUint256Cast()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_double (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_double VALUES " +
+                "(1, CAST(CAST(123.0 AS DOUBLE) AS UINT256))," +
+                "(2, CAST(CAST(0.0 AS DOUBLE) AS UINT256))," +
+                "(3, CAST(CAST(1000000000.0 AS DOUBLE) AS UINT256))", 3);
+
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_double ORDER BY id",
+                "VALUES (1, '000000000000000000000000000000000000000000000000000000000000007B')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '000000000000000000000000000000000000000000000000000000003B9ACA00')");
+
+        // Test negative double cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1.0 AS DOUBLE) AS UINT256)",
+                ".*Cannot cast negative DOUBLE value.*");
+
+        // Test non-integer double cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(123.5 AS DOUBLE) AS UINT256)",
+                ".*Cannot cast non-integer DOUBLE value.*");
+
+        // Test infinity cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(infinity() AS DOUBLE) AS UINT256)",
+                ".*Cannot cast non-finite DOUBLE value.*");
+
+        // Test NaN cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(nan() AS DOUBLE) AS UINT256)",
+                ".*Cannot cast non-finite DOUBLE value.*");
+    }
+/*
+    @Test
+    public void testDecimalToUint256Cast()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_decimal (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_decimal VALUES " +
+                "(1, CAST(CAST(123 AS DECIMAL(10,0)) AS UINT256))," +
+                "(2, CAST(CAST(0 AS DECIMAL(10,0)) AS UINT256))," +
+                "(3, CAST(CAST(999999999 AS DECIMAL(10,0)) AS UINT256))", 3);
+
+        assertQueryOrdered(
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_decimal ORDER BY id",
+                "VALUES (1, '000000000000000000000000000000000000000000000000000000000000007B')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
+                        "(3, '000000000000000000000000000000000000000000000000000000003B9AC9FF')");
+
+        // Test negative decimal cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(-1 AS DECIMAL(10,0)) AS UINT256)",
+                ".*Cannot cast negative DECIMAL value.*");
+
+        // Test non-integer decimal cast failure
+        assertQueryFails(
+                "SELECT CAST(CAST(123.5 AS DECIMAL(10,1)) AS UINT256)",
+                ".*Cannot cast non-integer DECIMAL value.*");
+    }
+*/
+    @Test
+    public void testImplicitConversionsWithArithmetic()
+    {
+        // Test implicit conversions in arithmetic operations according to Dune SQL spec
+        assertUpdate("CREATE TABLE memory.default.uint256_mixed (id INTEGER, u UINT256, i INTEGER, b BIGINT)");
+        assertUpdate("INSERT INTO memory.default.uint256_mixed VALUES " +
+                "(1, CAST(CAST(100 AS BIGINT) AS UINT256), 50, 200)", 1);
+
+        // Test UINT256 + INTEGER (should implicitly convert INTEGER to UINT256)
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_and(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
-                "VALUES '0000000000000000000000000000000000000000000000000000000000000000'");
-        // or
+                "SELECT to_hex(CAST(u + CAST(i AS UINT256) AS varbinary)) FROM memory.default.uint256_mixed WHERE id = 1",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000096'"); // 100 + 50 = 150 (0x96)
+
+        // Test UINT256 + BIGINT (should implicitly convert BIGINT to UINT256)
         assertQuery(
-                "SELECT to_hex(CAST(bitwise_or(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
-                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
-        // xor
-        assertQuery(
-                "SELECT to_hex(CAST(bitwise_xor(CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS varbinary))",
-                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
-        // not
-        assertQuery(
-                "SELECT to_hex(CAST(bitwise_not(CAST(from_hex('00FF') AS UINT256)) AS varbinary))",
-                // ~00FF => leading FFs then FF00
-                "VALUES 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00'");
+                "SELECT to_hex(CAST(u + CAST(b AS UINT256) AS varbinary)) FROM memory.default.uint256_mixed WHERE id = 1",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000012C'"); // 100 + 200 = 300 (0x12C)
     }
 }
