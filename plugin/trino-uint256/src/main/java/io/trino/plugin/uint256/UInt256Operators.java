@@ -63,6 +63,42 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(out);
     }
 
+    // uint256 + bigint -> uint256 (implicit conversion, overflow error)
+    @ScalarOperator(ADD)
+    @SqlType(UInt256Type.NAME)
+    public static Slice add(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                    format("Cannot add UINT256 with negative INTEGER value %s", right));
+        }
+        return add(left, castFromBigintToUint256(right));
+    }
+
+    // bigint + uint256 -> uint256 (implicit conversion, overflow error)
+    @ScalarOperator(ADD)
+    @SqlType(UInt256Type.NAME)
+    public static Slice add(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return add(castFromBigintToUint256(left), right);
+    }
+
+    // uint256 + double -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(ADD)
+    @SqlType(UInt256Type.NAME)
+    public static Slice add(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        return add(left, castFromDoubleToUint256(right));
+    }
+
+    // double + uint256 -> uint256
+    @ScalarOperator(ADD)
+    @SqlType(UInt256Type.NAME)
+    public static Slice add(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return add(castFromDoubleToUint256(left), right);
+    }
+
     // uint256 - uint256 -> uint256 (underflow error)
     @ScalarOperator(SUBTRACT)
     @SqlType(UInt256Type.NAME)
@@ -78,6 +114,42 @@ public final class UInt256Operators
             throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("uint256 subtraction underflow: 0x%s - 0x%s", toHex(a), toHex(b)));
         }
         return Slices.wrappedBuffer(toFixedUint256(res));
+    }
+
+    // uint256 - bigint -> uint256 (implicit conversion, underflow error)
+    @ScalarOperator(SUBTRACT)
+    @SqlType(UInt256Type.NAME)
+    public static Slice subtract(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                    format("Cannot subtract UINT256 with negative INTEGER value %s", right));
+        }
+        return subtract(left, castFromBigintToUint256(right));
+    }
+
+    // bigint - uint256 -> uint256 (implicit conversion, underflow/invalid cast error)
+    @ScalarOperator(SUBTRACT)
+    @SqlType(UInt256Type.NAME)
+    public static Slice subtract(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return subtract(castFromBigintToUint256(left), right);
+    }
+
+    // uint256 - double -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(SUBTRACT)
+    @SqlType(UInt256Type.NAME)
+    public static Slice subtract(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        return subtract(left, castFromDoubleToUint256(right));
+    }
+
+    // double - uint256 -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(SUBTRACT)
+    @SqlType(UInt256Type.NAME)
+    public static Slice subtract(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return subtract(castFromDoubleToUint256(left), right);
     }
 
     // uint256 * uint256 -> uint256 (overflow error)
@@ -96,6 +168,42 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(toFixedUint256(res));
     }
 
+    // uint256 * integer -> uint256 (implicit conversion, overflow error)
+    @ScalarOperator(MULTIPLY)
+    @SqlType(UInt256Type.NAME)
+    public static Slice multiply(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                format("Cannot multiply UINT256 with negative INTEGER value %s", right));
+        }
+        return multiply(left, castFromIntegerToUint256(right));
+    }
+
+    // integer * uint256 -> uint256 (implicit conversion, overflow error)
+    @ScalarOperator(MULTIPLY)
+    @SqlType(UInt256Type.NAME)
+    public static Slice multiply(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return multiply(right, left);
+    }
+
+    // uint256 * double -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(MULTIPLY)
+    @SqlType(UInt256Type.NAME)
+    public static Slice multiply(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        return multiply(left, castFromDoubleToUint256(right));
+    }
+
+    // double * uint256 -> uint256
+    @ScalarOperator(MULTIPLY)
+    @SqlType(UInt256Type.NAME)
+    public static Slice multiply(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return multiply(castFromDoubleToUint256(left), right);
+    }
+
     // uint256 / uint256 -> uint256 (division by zero error)
     @ScalarOperator(DIVIDE)
     @SqlType(UInt256Type.NAME)
@@ -110,6 +218,42 @@ public final class UInt256Operators
         }
         BigInteger res = biA.divide(biB);
         return Slices.wrappedBuffer(toFixedUint256(res));
+    }
+
+    // uint256 / bigint -> uint256 (implicit conversion, division by zero)
+    @ScalarOperator(DIVIDE)
+    @SqlType(UInt256Type.NAME)
+    public static Slice divide(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                    format("Cannot divide UINT256 with negative INTEGER value %s", right));
+        }
+        return divide(left, castFromBigintToUint256(right));
+    }
+
+    // bigint / uint256 -> uint256 (implicit conversion, division by zero)
+    @ScalarOperator(DIVIDE)
+    @SqlType(UInt256Type.NAME)
+    public static Slice divide(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return divide(castFromBigintToUint256(left), right);
+    }
+
+    // uint256 / double -> uint256 (double must be finite, non-negative integer; division by zero handled in divide)
+    @ScalarOperator(DIVIDE)
+    @SqlType(UInt256Type.NAME)
+    public static Slice divide(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        return divide(left, castFromDoubleToUint256(right));
+    }
+
+    // double / uint256 -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(DIVIDE)
+    @SqlType(UInt256Type.NAME)
+    public static Slice divide(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return divide(castFromDoubleToUint256(left), right);
     }
 
     // CAST(varbinary -> uint256)
