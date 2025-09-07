@@ -493,6 +493,18 @@ public final class UInt256Operators
         return out;
     }
 
+    public static BigInteger getBigInteger(Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        return new BigInteger(1, bytes);
+    }
+
+    public static long getLong(Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        return new BigInteger(1, bytes).longValue();
+    }
+
     private static String toHex(byte[] bytes)
     {
         char[] h = "0123456789abcdef".toCharArray();
