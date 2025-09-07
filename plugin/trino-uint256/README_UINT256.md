@@ -132,7 +132,7 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 - 其他算术：减法/乘法/除法（正常与错误场景）
 - 位运算（SQL 函数）：bitwise_and / bitwise_or / bitwise_xor / bitwise_not（to_hex 验证）
 
-## 覆盖进度（c完成/未完成/ur未二次确认）
+## 覆盖进度（c完成/未完成/x未二次确认）
 
 - [c] 类型基本属性/类型签名
 - [c] Block 读写、appendTo、容量、多值
@@ -142,6 +142,7 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 - [x] CAST(bigint → uint256)
 - [x] 算术（+、-、*、/）含溢出/下溢/除零错误
 - [x] 位运算（AND/OR/XOR/NOT）
+- [ ] 位运算支持左移右移
 - [x] SQL 层：DDL、插入、查询、排序、谓词
 - [x] NULL 传播（加法）
 - [ ] NULL 传播覆盖更多运算（减/乘/除/位运算）

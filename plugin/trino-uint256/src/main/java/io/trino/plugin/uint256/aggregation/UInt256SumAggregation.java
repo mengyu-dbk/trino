@@ -37,8 +37,8 @@ public final class UInt256SumAggregation
     @InputFunction
     public static void sum(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
     {
-        state.setSum(UInt256Operators.getLong(value));
-        state.setCount(0);
+        state.setSum(state.getSum() + UInt256Operators.getLong(value));
+        state.setCount(state.getCount() + 1);
     }
 
     @CombineFunction
