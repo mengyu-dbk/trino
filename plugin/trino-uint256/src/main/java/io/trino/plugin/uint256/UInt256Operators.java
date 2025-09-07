@@ -38,7 +38,7 @@ import static java.lang.String.format;
 
 public final class UInt256Operators
 {
-    private static final int UINT256_BYTES = 32;
+    private static final int UINT256_BYTES = UInt256Type.UINT256_BYTE_LENGTH;
 
     private UInt256Operators() {}
 
@@ -149,6 +149,79 @@ public final class UInt256Operators
             throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative BIGINT value %s to UINT256", input));
         }
         return uint256(input);
+    }
+
+    // CAST(integer -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromIntegerToUint256(@SqlType(StandardTypes.INTEGER) long input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative INTEGER value %s to UINT256", input));
+        }
+        return uint256(input);
+    }
+
+    // CAST(smallint -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromSmallintToUint256(@SqlType(StandardTypes.SMALLINT) long input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative SMALLINT value %s to UINT256", input));
+        }
+        return uint256(input);
+    }
+
+    // CAST(tinyint -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromTinyintToUint256(@SqlType(StandardTypes.TINYINT) long input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative TINYINT value %s to UINT256", input));
+        }
+        return uint256(input);
+    }
+
+    // CAST(real -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromRealToUint256(@SqlType(StandardTypes.REAL) long input)
+    {
+        float value = Float.intBitsToFloat((int) input);
+        if (value < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative REAL value %s to UINT256", value));
+        }
+        if (!Float.isFinite(value)) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast non-finite REAL value %s to UINT256", value));
+        }
+        if (value != Math.floor(value)) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast non-integer REAL value %s to UINT256", value));
+        }
+        // Convert to BigInteger to handle large values
+        BigInteger bigValue = new BigInteger(String.valueOf((long) value));
+        return Slices.wrappedBuffer(toFixedUint256(bigValue));
+    }
+
+    // CAST(double -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromDoubleToUint256(@SqlType(StandardTypes.DOUBLE) double input)
+    {
+        if (input < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative DOUBLE value %s to UINT256", input));
+        }
+        if (!Double.isFinite(input)) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast non-finite DOUBLE value %s to UINT256", input));
+        }
+        if (input != Math.floor(input)) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast non-integer DOUBLE value %s to UINT256", input));
+        }
+        // Use BigDecimal for precision when converting large doubles
+        java.math.BigDecimal decimal = java.math.BigDecimal.valueOf(input);
+        BigInteger bigValue = decimal.toBigInteger();
+        return Slices.wrappedBuffer(toFixedUint256(bigValue));
     }
 
     // CAST(varchar -> uint256) : 只支持十进制字符串转换
