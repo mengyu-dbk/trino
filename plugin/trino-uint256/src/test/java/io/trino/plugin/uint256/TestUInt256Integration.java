@@ -285,4 +285,173 @@ public class TestUInt256Integration
                 "SELECT to_hex(CAST(u + CAST(b AS UINT256) AS varbinary)) FROM memory.default.uint256_mixed WHERE id = 1",
                 "VALUES '000000000000000000000000000000000000000000000000000000000000012C'"); // 100 + 200 = 300 (0x12C)
     }
+
+    @Test
+    public void testModulusOperations()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_modulus (id INTEGER, dividend UINT256, divisor UINT256, expected_result VARCHAR)");
+
+        // Insert test data for modulus operations
+        assertUpdate("INSERT INTO memory.default.uint256_modulus VALUES " +
+                "(1, CAST(from_hex('0A') AS UINT256), CAST(from_hex('03') AS UINT256), '1')," + // 10 % 3 = 1
+                "(2, CAST(from_hex('0F') AS UINT256), CAST(from_hex('04') AS UINT256), '3')," + // 15 % 4 = 3
+                "(3, CAST(from_hex('07') AS UINT256), CAST(from_hex('07') AS UINT256), '0')," + // 7 % 7 = 0
+                "(4, CAST(from_hex('05') AS UINT256), CAST(from_hex('0A') AS UINT256), '5')," + // 5 % 10 = 5
+                "(5, CAST(from_hex('64') AS UINT256), CAST(from_hex('07') AS UINT256), '2')", 5); // 100 % 7 = 2
+
+        // Test basic modulus operations
+        assertQueryOrdered(
+                "SELECT id, CAST(dividend % divisor AS VARCHAR) FROM memory.default.uint256_modulus ORDER BY id",
+                "VALUES (1, '1'), (2, '3'), (3, '0'), (4, '5'), (5, '2')");
+
+        // Test modulus with large numbers
+        assertUpdate("INSERT INTO memory.default.uint256_modulus VALUES " +
+                "(6, UINT256 '81985529216486895', CAST(from_hex('1000') AS UINT256), '3567')", 1); // 0x123456789ABCDEF % 0x1000 = 0xEF = 239
+
+        assertQuery(
+                "SELECT CAST(dividend % divisor AS VARCHAR) FROM memory.default.uint256_modulus WHERE id = 6",
+                "VALUES '3567'");
+
+        // Test modulus by zero should fail
+        assertQueryFails(
+                "SELECT CAST(from_hex('0A') AS UINT256) % CAST(from_hex('00') AS UINT256)",
+                ".*Division by zero.*");
+    }
+
+    @Test
+    public void testModulusWithMixedTypes()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_modulus_mixed (id INTEGER, value UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_modulus_mixed VALUES " +
+                "(1, CAST(from_hex('0A') AS UINT256))," + // 10
+                "(2, CAST(from_hex('64') AS UINT256))," + // 100
+                "(3, CAST(from_hex('63') AS UINT256))", 3); // 99
+
+        // Test UINT256 % BIGINT
+        assertQueryOrdered(
+                "SELECT id, CAST(value % CAST(3 AS BIGINT) AS VARCHAR) FROM memory.default.uint256_modulus_mixed WHERE id IN (1, 2) ORDER BY id",
+                "VALUES (1, '1'), (2, '1')"); // 10 % 3 = 1, 100 % 3 = 1
+
+        // Test BIGINT % UINT256
+        assertQuery(
+                "SELECT CAST(CAST(17 AS BIGINT) % value AS VARCHAR) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                "VALUES '7'"); // 17 % 10 = 7
+
+        // Test UINT256 % DOUBLE (integer-valued double)
+        assertQuery(
+                "SELECT CAST(value % CAST(7.0 AS DOUBLE) AS VARCHAR) FROM memory.default.uint256_modulus_mixed WHERE id = 2",
+                "VALUES '2'"); // 100 % 7 = 2
+
+        // Test DOUBLE % UINT256 (integer-valued double)
+        assertQuery(
+                "SELECT CAST(CAST(99.0 AS DOUBLE) % value AS VARCHAR) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                "VALUES '9'"); // 99 % 10 = 9
+
+        // Test negative BIGINT should fail
+        assertQueryFails(
+                "SELECT value % CAST(-3 AS BIGINT) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                ".*Cannot modulus UINT256 with negative INTEGER value.*");
+
+        // Test non-integer DOUBLE should fail
+        assertQueryFails(
+                "SELECT value % CAST(3.5 AS DOUBLE) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                ".*Cannot cast non-integer DOUBLE value.*");
+
+        // Test modulus by zero (BIGINT)
+        assertQueryFails(
+                "SELECT value % CAST(0 AS BIGINT) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                ".*Division by zero.*");
+
+        // Test modulus by zero (DOUBLE)
+        assertQueryFails(
+                "SELECT value % CAST(0.0 AS DOUBLE) FROM memory.default.uint256_modulus_mixed WHERE id = 1",
+                ".*Division by zero.*");
+    }
+
+    @Test
+    public void testModulusEdgeCases()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_modulus_edge (id INTEGER, value UINT256)");
+
+        // Insert edge case values
+        assertUpdate("INSERT INTO memory.default.uint256_modulus_edge VALUES " +
+                "(1, CAST(from_hex('00') AS UINT256))," + // 0
+                "(2, CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256))," + // max uint256
+                "(3, CAST(from_hex('123456789ABCDEF123456789ABCDEF') AS UINT256))", 3); // large number
+
+        // Test 0 % anything = 0
+        assertQuery(
+                "SELECT CAST(value % CAST(from_hex('05') AS UINT256) AS VARCHAR) FROM memory.default.uint256_modulus_edge WHERE id = 1",
+                "VALUES '0'");
+
+        assertQuery(
+                "SELECT CAST(value % CAST(7 AS BIGINT) AS VARCHAR) FROM memory.default.uint256_modulus_edge WHERE id = 1",
+                "VALUES '0'");
+
+        // Test large number % 1 = 0
+        assertQuery(
+                "SELECT CAST(value % CAST(from_hex('01') AS UINT256) AS VARCHAR) FROM memory.default.uint256_modulus_edge WHERE id = 3",
+                "VALUES '0'");
+
+        // Test max uint256 % 2 = 1 (max uint256 is odd)
+        assertQuery(
+                "SELECT CAST(value % CAST(from_hex('02') AS UINT256) AS VARCHAR) FROM memory.default.uint256_modulus_edge WHERE id = 2",
+                "VALUES '1'");
+
+        // Test max uint256 % 16 = 15 (0xF)
+        assertQuery(
+                "SELECT CAST(value % CAST(from_hex('10') AS UINT256) AS VARCHAR) FROM memory.default.uint256_modulus_edge WHERE id = 2",
+                "VALUES '15'");
+    }
+
+    @Test
+    public void testComplexArithmeticWithModulus()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_complex_modulus (id INTEGER, a UINT256, b UINT256, c UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_complex_modulus VALUES " +
+                "(1, CAST(from_hex('14') AS UINT256), CAST(from_hex('0A') AS UINT256), CAST(from_hex('03') AS UINT256))", 1); // 20, 10, 3
+
+        // Test (a + b) % c = (20 + 10) % 3 = 30 % 3 = 0
+        assertQuery(
+                "SELECT CAST((a + b) % c AS VARCHAR) FROM memory.default.uint256_complex_modulus WHERE id = 1",
+                "VALUES '0'");
+
+        // Test (a * b) % c = (20 * 10) % 3 = 200 % 3 = 2
+        assertQuery(
+                "SELECT CAST((a * b) % c AS VARCHAR) FROM memory.default.uint256_complex_modulus WHERE id = 1",
+                "VALUES '2'");
+
+        // Test a % (b - c) = 20 % (10 - 3) = 20 % 7 = 6
+        assertQuery(
+                "SELECT CAST(a % (b - c) AS VARCHAR) FROM memory.default.uint256_complex_modulus WHERE id = 1",
+                "VALUES '6'");
+
+        // Test modular arithmetic properties: (a % c + b % c) % c = (a + b) % c
+        assertQuery(
+                "SELECT CAST((a % c + b % c) % c AS VARCHAR), CAST((a + b) % c AS VARCHAR) " +
+                "FROM memory.default.uint256_complex_modulus WHERE id = 1",
+                "VALUES ('0', '0')");
+    }
+
+    @Test
+    public void testNullHandlingWithModulus()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_modulus_null (id INTEGER, value UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_modulus_null VALUES " +
+                "(1, CAST(from_hex('0A') AS UINT256))," +
+                "(2, NULL)", 2);
+
+        // Test modulus with NULL values
+        assertQuery(
+                "SELECT COUNT(*) FROM memory.default.uint256_modulus_null WHERE value % CAST(from_hex('03') AS UINT256) IS NOT NULL",
+                "VALUES 1");
+
+        assertQuery(
+                "SELECT COUNT(*) FROM memory.default.uint256_modulus_null WHERE value % CAST(from_hex('03') AS UINT256) IS NULL",
+                "VALUES 1");
+
+        // Test NULL % value and value % NULL both return NULL
+        assertQueryReturnsEmptyResult(
+                "SELECT value % CAST(from_hex('03') AS UINT256) FROM memory.default.uint256_modulus_null WHERE id = 2 AND value IS NOT NULL");
+    }
 }
