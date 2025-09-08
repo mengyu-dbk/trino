@@ -680,6 +680,190 @@ public class TestUInt256Query
     }
 
     @Test
+    public void testModulusOperations()
+    {
+        // 测试基本的取模运算 uint256 % uint256
+
+        // 10 % 3 = 1
+        Slice ten = uint256FromHex("a"); // 10
+        Slice three = uint256FromHex("3");
+        Slice result = UInt256Operators.modulus(ten, three);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // 15 % 4 = 3
+        Slice fifteen = uint256FromHex("f"); // 15
+        Slice four = uint256FromHex("4");
+        result = UInt256Operators.modulus(fifteen, four);
+        assertThat(toDecimal(result)).isEqualTo("3");
+
+        // 7 % 7 = 0
+        Slice seven = uint256FromHex("7");
+        result = UInt256Operators.modulus(seven, seven);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        // 5 % 10 = 5 (被除数小于除数)
+        result = UInt256Operators.modulus(uint256FromHex("5"), ten);
+        assertThat(toDecimal(result)).isEqualTo("5");
+
+        // 大数取模
+        Slice large = uint256FromHex("123456789abcdef");
+        Slice mod = uint256FromHex("1000");
+        result = UInt256Operators.modulus(large, mod);
+        // 123456789abcdef % 1000 = ef (最后3位十六进制)
+        assertThat(toDecimal(result)).isEqualTo("3567"); // 0x239 = 3567
+
+        // 测试除零错误
+        Slice zero = uint256FromHex("0");
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, zero))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+    }
+
+    @Test
+    public void testModulusWithBigint()
+    {
+        // uint256 % bigint
+        Slice ten = uint256FromHex("a"); // 10
+        Slice result = UInt256Operators.modulus(ten, 3L);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // bigint % uint256
+        result = UInt256Operators.modulus(17L, uint256FromHex("5"));
+        assertThat(toDecimal(result)).isEqualTo("2");
+
+        // 测试较大的值
+        Slice hundred = uint256FromHex("64"); // 100
+        result = UInt256Operators.modulus(hundred, 7L);
+        assertThat(toDecimal(result)).isEqualTo("2"); // 100 % 7 = 2
+
+        result = UInt256Operators.modulus(99L, uint256FromHex("8"));
+        assertThat(toDecimal(result)).isEqualTo("3"); // 99 % 8 = 3
+
+        // 测试负数bigint应该失败
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, -3L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot modulus UINT256 with negative INTEGER value");
+
+        assertThatThrownBy(() -> UInt256Operators.modulus(-5L, ten))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast negative BIGINT value");
+
+        // 测试除零
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, 0L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+    }
+
+    @Test
+    public void testModulusWithDouble()
+    {
+        // uint256 % double
+        Slice ten = uint256FromHex("a"); // 10
+        Slice result = UInt256Operators.modulus(ten, 3.0);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // double % uint256
+        result = UInt256Operators.modulus(17.0, uint256FromHex("5"));
+        assertThat(toDecimal(result)).isEqualTo("2");
+
+        // 测试较大的值
+        result = UInt256Operators.modulus(uint256FromHex("64"), 7.0); // 100 % 7 = 2
+        assertThat(toDecimal(result)).isEqualTo("2");
+
+        result = UInt256Operators.modulus(99.0, uint256FromHex("8"));
+        assertThat(toDecimal(result)).isEqualTo("3"); // 99 % 8 = 3
+
+        // 测试负数double应该失败
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, -3.0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast negative DOUBLE value");
+
+        assertThatThrownBy(() -> UInt256Operators.modulus(-5.0, ten))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast negative DOUBLE value");
+
+        // 测试非整数double应该失败
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, 3.5))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast non-integer DOUBLE value");
+
+        assertThatThrownBy(() -> UInt256Operators.modulus(10.5, ten))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast non-integer DOUBLE value");
+
+        // 测试除零
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, 0.0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Division by zero");
+
+        // 测试无穷大和NaN应该失败
+        assertThatThrownBy(() -> UInt256Operators.modulus(ten, Double.POSITIVE_INFINITY))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast non-finite DOUBLE value");
+
+        assertThatThrownBy(() -> UInt256Operators.modulus(Double.NaN, ten))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Cannot cast non-finite DOUBLE value");
+    }
+
+    @Test
+    public void testModulusEdgeCases()
+    {
+        // 测试 0 % 任何数 = 0
+        Slice zero = uint256FromHex("0");
+        Slice five = uint256FromHex("5");
+        Slice result = UInt256Operators.modulus(zero, five);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        result = UInt256Operators.modulus(zero, 7L);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        result = UInt256Operators.modulus(zero, 3.0);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        // 测试大数 % 1 = 0
+        Slice large = uint256FromHex("123456789abcdef123456789abcdef");
+        Slice one = uint256FromHex("1");
+        result = UInt256Operators.modulus(large, one);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        // 测试最大值取模运算
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice two = uint256FromHex("2");
+        result = UInt256Operators.modulus(max, two);
+        assertThat(toDecimal(result)).isEqualTo("1"); // 最大uint256是奇数
+
+        // 测试大数取模得到小余数
+        Slice sixteen = uint256FromHex("10"); // 16
+        result = UInt256Operators.modulus(max, sixteen);
+        assertThat(toDecimal(result)).isEqualTo("15"); // 0xf = 15
+    }
+
+    @Test
+    public void testModulusOverflowAndLargeNumbers()
+    {
+        // 测试非常大的数的取模运算
+        Slice veryLarge1 = uint256FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000");
+        Slice veryLarge2 = uint256FromHex("123456789abcdef123456789abcdef123456789abcdef123456789abcdef");
+        Slice result = UInt256Operators.modulus(veryLarge1, veryLarge2);
+
+        // 验证结果是有效的（小于除数）
+        BigInteger dividend = new BigInteger(1, veryLarge1.getBytes());
+        BigInteger divisor = new BigInteger(1, veryLarge2.getBytes());
+        BigInteger expectedResult = dividend.remainder(divisor);
+        BigInteger actualResult = new BigInteger(1, result.getBytes());
+
+        assertThat(actualResult).isEqualTo(expectedResult);
+        assertThat(actualResult.compareTo(divisor)).isLessThan(0); // 余数小于除数
+
+        // 测试边界情况：最大值-1 % 最大值 = 最大值-1
+        Slice maxMinus1 = uint256FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        result = UInt256Operators.modulus(maxMinus1, max);
+        assertThat(toDecimal(result)).isEqualTo(toDecimal(maxMinus1));
+    }
+
+    @Test
     public void testBitwiseShiftOperations()
     {
         // 测试左移操作

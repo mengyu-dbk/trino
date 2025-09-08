@@ -32,6 +32,7 @@ import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.function.OperatorType.ADD;
 import static io.trino.spi.function.OperatorType.CAST;
 import static io.trino.spi.function.OperatorType.DIVIDE;
+import static io.trino.spi.function.OperatorType.MODULUS;
 import static io.trino.spi.function.OperatorType.MULTIPLY;
 import static io.trino.spi.function.OperatorType.SUBTRACT;
 import static java.lang.String.format;
@@ -255,6 +256,59 @@ public final class UInt256Operators
     {
         return divide(castFromDoubleToUint256(left), right);
     }
+
+    // uint256 % uint256 -> uint256 (modulus by zero error)
+    @ScalarOperator(MODULUS)
+    @SqlType(UInt256Type.NAME)
+    public static Slice modulus(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        byte[] a = ensureUint256(left);
+        byte[] b = ensureUint256(right);
+        BigInteger biA = new BigInteger(1, a);
+        BigInteger biB = new BigInteger(1, b);
+        if (biB.signum() == 0) {
+            throw new TrinoException(DIVISION_BY_ZERO, "Division by zero");
+        }
+        BigInteger res = biA.remainder(biB);
+        return Slices.wrappedBuffer(toFixedUint256(res));
+    }
+
+    // uint256 % bigint -> uint256 (implicit conversion, modulus by zero)
+    @ScalarOperator(MODULUS)
+    @SqlType(UInt256Type.NAME)
+    public static Slice modulus(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                    format("Cannot modulus UINT256 with negative INTEGER value %s", right));
+        }
+        return modulus(left, castFromBigintToUint256(right));
+    }
+
+    // bigint % uint256 -> uint256 (implicit conversion, modulus by zero)
+    @ScalarOperator(MODULUS)
+    @SqlType(UInt256Type.NAME)
+    public static Slice modulus(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return modulus(castFromBigintToUint256(left), right);
+    }
+
+    // uint256 % double -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(MODULUS)
+    @SqlType(UInt256Type.NAME)
+    public static Slice modulus(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        return modulus(left, castFromDoubleToUint256(right));
+    }
+
+    // double % uint256 -> uint256 (double must be finite, non-negative integer)
+    @ScalarOperator(MODULUS)
+    @SqlType(UInt256Type.NAME)
+    public static Slice modulus(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return modulus(castFromDoubleToUint256(left), right);
+    }
+
     /*
         Trino 不支持自定义运算符函数覆盖内置的实现
         io.trino.metadata.GlobalFunctionCatalog.checkNotSpecializedTypeOperator

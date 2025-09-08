@@ -8,10 +8,10 @@
 - 底层表示: `VARBINARY()`（默认规范化为大端32字节，地址最高的字节存放最小的几位数）(如果有性能/存储放大问题，后面可以规划到使用char(32) 来实现）
 - 支持能力:
   - 比较、排序、读写
-  - 算术：加减乘除（`+`, `-`, `*`, `/`），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
+  - 算术：加减乘除（`+`, `-`, `*`, `/`, '%'），溢出报错（NUMERIC_VALUE_OUT_OF_RANGE）
   - CAST：`varbinary ↔ uint256`, `varchar ↔ uint256`, `bigint -> uint256`
   - 便捷构造函数：`uint256(varbinary)`
-  - 位运算：AND、OR、XOR、NOT，左移右移。
+  - 位运算：AND、OR、XOR、NOT、左移、右移。
 - 空值支持: 与 SQL 一致
 - 数值范围: 0 .. 2^256 - 1
 
@@ -140,19 +140,22 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 - [x] 边界值（0、max=2^256-1）
 - [x] CAST(varbinary ↔ uint256)
 - [x] CAST(varchar ↔ uint256)（十进制）
-- [x] CAST(bigint → uint256)
-- [x] 算术（+、-、*、/）含溢出/下溢/除零错误
-- [x] 位运算（AND/OR/XOR/NOT）
-- [ ] 位运算支持左移右移
+- [x] CAST(数字类型 → uint256)
+- [ ] CAST(uint256 -> 数字类型)（可能转换失败） 
+- [ ] CAST(Decimal -> uint256)
+- [暂停] 隐式类型转换支持查询、排序、谓词（不修改引擎无法实现） https://github.com/trinodb/trino/issues/3726
+- [x] 算术（+、-、*、/、%）含溢出/下溢/除零错误
+- [c] 位运算（AND/OR/XOR/NOT）
+- [c] 位运算支持左移右移()
 - [x] SQL 层：DDL、插入、查询、排序、谓词
 - [x] NULL 传播（加法）
-- [ ] NULL 传播覆盖更多运算（减/乘/除/位运算）
-- [ ] VARCHAR 解析的健壮性：
+- [x] NULL 传播覆盖更多运算（减/乘/除/位运算）
+- [x] 测试VARCHAR 解析的健壮性：
   - 前后空白裁剪（如 ' 15 '）
   - 前导'+'号（如 '+15'）
   - 前导零（如 '00015' 的等价性明确验证）
-- [ ] 十进制边界值：'0' 与 2^256-1 的十进制字符串正确性验证
-- [ ] 更丰富的比较谓词：=、<、BETWEEN、IN 等
+- [x] 十进制边界值：'0' 与 2^256-1 的十进制字符串正确性验证
+- [c] 更丰富的比较谓词：=、<、BETWEEN、IN 等
 - [ ] 分组/聚合/去重：GROUP BY、ORDER BY 多键、DISTINCT
 - [ ] 连接键：JOIN ON UINT256 的匹配/去重
 
