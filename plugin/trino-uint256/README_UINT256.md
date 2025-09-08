@@ -27,7 +27,8 @@
 ### 0) 如何测试
 - 需要按照Trino根目录README的步骤编译，并确认能够启动开发服务器。
 - Intellij 在项目结构-模块中导入pom.xml，加载所有模块。（有的时候开发一下就没法启动了，重新clone是最简单的修复方式）
-- 启动 Trino 集群，加载 `trino-uint256` 插件（放置到 `plugin/` 目录下并重启）
+- 第一种方式：运行DevServer模块：etc/config.properties添加配置加载uint256分支，再根据根目录中 `Running a testing server` 的方式，运行DevServer（本分支已添加对应配置）。
+- 第二种方式：启动 Trino 集群，加载 `trino-uint256` 插件（放置到 `plugin/` 目录下并重启）
 - 使用 `memory` 连接器（或其他支持的连接器）
 - 创建测试表，插入数据，执行查询。
 
