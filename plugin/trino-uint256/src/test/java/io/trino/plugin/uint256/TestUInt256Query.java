@@ -678,4 +678,148 @@ public class TestUInt256Query
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("Division by zero");
     }
+
+    @Test
+    public void testBitwiseShiftOperations()
+    {
+        // 测试左移操作
+
+        // 基本左移: 1 << 1 = 2
+        Slice one = uint256FromHex("1");
+        Slice leftShift1 = UInt256Operators.bitwiseLeftShift(one, 1L);
+        assertThat(toDecimal(leftShift1)).isEqualTo("2");
+
+        // 左移多位: 1 << 8 = 256
+        Slice leftShift8 = UInt256Operators.bitwiseLeftShift(one, 8L);
+        assertThat(toDecimal(leftShift8)).isEqualTo("256");
+
+        // 左移0位: 42 << 0 = 42
+        Slice fortyTwo = uint256FromHex("2a"); // 42 in hex
+        Slice leftShift0 = UInt256Operators.bitwiseLeftShift(fortyTwo, 0L);
+        assertThat(toDecimal(leftShift0)).isEqualTo("42");
+
+        // 较大数值左移: 0xFF << 4 = 0xFF0
+        Slice ff = uint256FromHex("ff");
+        Slice leftShift4 = UInt256Operators.bitwiseLeftShift(ff, 4L);
+        assertThat(toDecimal(leftShift4)).isEqualTo("4080"); // 0xFF0 = 4080
+
+        // 测试右移操作
+
+        // 基本右移: 2 >> 1 = 1
+        Slice two = uint256FromHex("2");
+        Slice rightShift1 = UInt256Operators.bitwiseRightShift(two, 1L);
+        assertThat(toDecimal(rightShift1)).isEqualTo("1");
+
+        // 右移多位: 256 >> 8 = 1
+        Slice twoFiveSix = uint256FromHex("100"); // 256 in hex
+        Slice rightShift8 = UInt256Operators.bitwiseRightShift(twoFiveSix, 8L);
+        assertThat(toDecimal(rightShift8)).isEqualTo("1");
+
+        // 右移0位: 42 >> 0 = 42
+        Slice rightShift0 = UInt256Operators.bitwiseRightShift(fortyTwo, 0L);
+        assertThat(toDecimal(rightShift0)).isEqualTo("42");
+
+        // 较大数值右移: 0xFF0 >> 4 = 0xFF
+        Slice ff0 = uint256FromHex("ff0");
+        Slice rightShift4 = UInt256Operators.bitwiseRightShift(ff0, 4L);
+        assertThat(toDecimal(rightShift4)).isEqualTo("255"); // 0xFF = 255
+
+        // 右移到0: 1 >> 8 = 0
+        Slice rightShiftToZero = UInt256Operators.bitwiseRightShift(one, 8L);
+        assertThat(toDecimal(rightShiftToZero)).isEqualTo("0");
+    }
+
+    @Test
+    public void testBitwiseShiftEdgeCases()
+    {
+        Slice one = uint256FromHex("1");
+        Slice zero = uint256FromHex("0");
+
+        // 测试移位量超过256位的情况
+
+        // 左移超过256位应该返回0
+        Slice leftShiftOver256 = UInt256Operators.bitwiseLeftShift(one, 256L);
+        assertThat(toDecimal(leftShiftOver256)).isEqualTo("0");
+
+        Slice leftShiftOver300 = UInt256Operators.bitwiseLeftShift(one, 300L);
+        assertThat(toDecimal(leftShiftOver300)).isEqualTo("0");
+
+        // 右移超过256位应该返回0
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        Slice rightShiftOver256 = UInt256Operators.bitwiseRightShift(max, 256L);
+        assertThat(toDecimal(rightShiftOver256)).isEqualTo("0");
+
+        Slice rightShiftOver300 = UInt256Operators.bitwiseRightShift(max, 300L);
+        assertThat(toDecimal(rightShiftOver300)).isEqualTo("0");
+
+        // 测试负数移位量（应该抛出异常）
+        assertThatThrownBy(() -> UInt256Operators.bitwiseLeftShift(one, -1L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Shift amount cannot be negative");
+
+        assertThatThrownBy(() -> UInt256Operators.bitwiseRightShift(one, -5L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Shift amount cannot be negative");
+
+        // 测试0的移位操作
+        Slice zeroLeftShift = UInt256Operators.bitwiseLeftShift(zero, 10L);
+        assertThat(toDecimal(zeroLeftShift)).isEqualTo("0");
+
+        Slice zeroRightShift = UInt256Operators.bitwiseRightShift(zero, 10L);
+        assertThat(toDecimal(zeroRightShift)).isEqualTo("0");
+    }
+
+    @Test
+    public void testBitwiseShiftOverflow()
+    {
+        // 测试左移溢出
+
+        // 1 << 255 应该成功（最高位）
+        Slice one = uint256FromHex("1");
+        Slice leftShift255 = UInt256Operators.bitwiseLeftShift(one, 255L);
+        // 这应该是 2^255 = 57896044618658097711785492504343953926634992332820282019728792003956564819968
+        assertThat(toDecimal(leftShift255)).isEqualTo("57896044618658097711785492504343953926634992332820282019728792003956564819968");
+
+        // 2 << 255 应该溢出
+        Slice two = uint256FromHex("2");
+        assertThatThrownBy(() -> UInt256Operators.bitwiseLeftShift(two, 255L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Left shift overflow: value would exceed 256 bits");
+
+        // 最大值左移1位应该溢出
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        assertThatThrownBy(() -> UInt256Operators.bitwiseLeftShift(max, 1L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Left shift overflow: value would exceed 256 bits");
+
+        // 但是最大值右移任何位数都不应该溢出
+        Slice maxRightShift1 = UInt256Operators.bitwiseRightShift(max, 1L);
+        assertThat(toDecimal(maxRightShift1)).isEqualTo("57896044618658097711785492504343953926634992332820282019728792003956564819967");
+    }
+
+    @Test
+    public void testBitwiseShiftComplexPatterns()
+    {
+        // 测试交替位模式: 0xAAAA... << 1 = 0x5555...（低位补0）
+        Slice alternatingPattern = uint256FromHex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        Slice shiftedPattern = UInt256Operators.bitwiseLeftShift(alternatingPattern, 1L);
+
+        // 0xAAAA... << 1 应该等于 0x15555...5554（因为最高位被移出）
+        String expectedHex = "1555555555555555555555555555555555555555555555555555555555555554";
+        Slice expected = uint256FromHex(expectedHex);
+        assertThat(toDecimal(shiftedPattern)).isEqualTo(toDecimal(expected));
+
+        // 测试右移保持模式
+        Slice rightShiftedPattern = UInt256Operators.bitwiseRightShift(alternatingPattern, 1L);
+        // 0xAAAA... >> 1 = 0x5555...
+        String expectedRightHex = "555555555555555555555555555555555555555555555555555555555555555";
+        Slice expectedRight = uint256FromHex(expectedRightHex);
+        assertThat(toDecimal(rightShiftedPattern)).isEqualTo(toDecimal(expectedRight));
+
+        // 测试往返操作: (value << n) >> n 对于不溢出的情况应该等于原值
+        Slice original = uint256FromHex("123456789abcdef");
+        Slice shiftLeftThenRight = UInt256Operators.bitwiseRightShift(
+                UInt256Operators.bitwiseLeftShift(original, 4L), 4L);
+        assertThat(toDecimal(shiftLeftThenRight)).isEqualTo(toDecimal(original));
+    }
 }

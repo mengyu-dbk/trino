@@ -269,102 +269,7 @@ public final class UInt256Operators
             8. LESS_THAN
             9. LESS_THAN_OR_EQUAL
         因此以下的重载实现均无效
-
-    @ScalarOperator(LESS_THAN)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        return getBigInteger(left).compareTo(getBigInteger(right)) < 0;
-    }
-
-    @ScalarOperator(LESS_THAN)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
-    {
-        if (right < 0) {
-            return false; // uint256 is always >= 0
-        }
-        return getBigInteger(left).compareTo(BigInteger.valueOf(right)) < 0;
-    }
-
-    @ScalarOperator(LESS_THAN)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThan(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        if (left < 0) {
-            return true; // uint256 is always >= 0
-        }
-        return BigInteger.valueOf(left).compareTo(getBigInteger(right)) < 0;
-    }
-
-    @ScalarOperator(LESS_THAN)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
-    {
-        if (right < 0) {
-            return false; // uint256 is always >= 0
-        }
-        return getBigInteger(left).compareTo(BigInteger.valueOf((long) Math.ceil(right))) < 0;
-    }
-
-    @ScalarOperator(LESS_THAN)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThan(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        if (left < 0) {
-            return true; // uint256 is always >= 0
-        }
-        return BigInteger.valueOf((long) Math.ceil(left)).compareTo(getBigInteger(right)) < 0;
-    }
-
-    @ScalarOperator(LESS_THAN_OR_EQUAL)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        int result = getBigInteger(left).compareTo(getBigInteger(right));
-        return result <= 0;
-    }
-
-    @ScalarOperator(LESS_THAN_OR_EQUAL)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
-    {
-        if (right < 0) {
-            return false; // uint256 is always >= 0
-        }
-        return getBigInteger(left).compareTo(BigInteger.valueOf(right)) <= 0;
-    }
-
-    @ScalarOperator(LESS_THAN_OR_EQUAL)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThanOrEqual(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        if (left <= 0) {
-            return true; // uint256 is always >= 0
-        }
-        return BigInteger.valueOf(left).compareTo(getBigInteger(right)) <= 0;
-    }
-
-    @ScalarOperator(LESS_THAN_OR_EQUAL)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
-    {
-        if (right < 0) {
-            return false; // uint256 is always >= 0
-        }
-        return getBigInteger(left).compareTo(BigInteger.valueOf((long) Math.ceil(right))) <= 0;
-    }
-
-    @ScalarOperator(LESS_THAN_OR_EQUAL)
-    @SqlType(StandardTypes.BOOLEAN)
-    public static boolean lessThanOrEqual(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
-    {
-        if (left <= 0) {
-            return true; // uint256 is always >= 0
-        }
-        return BigInteger.valueOf((long) Math.ceil(left)).compareTo(getBigInteger(right)) <= 0;
-    }
-     */
+   */
 
     // CAST(varbinary -> uint256)
     @ScalarOperator(CAST)
@@ -587,6 +492,51 @@ public final class UInt256Operators
             out[i] = (byte) (~a[i]);
         }
         return Slices.wrappedBuffer(out);
+    }
+
+    // 位运算：左移
+    @ScalarFunction("bitwise_left_shift")
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseLeftShift(@SqlType(UInt256Type.NAME) Slice value, @SqlType(StandardTypes.BIGINT) long shiftBits)
+    {
+        if (shiftBits < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, "Shift amount cannot be negative");
+        }
+        if (shiftBits >= 256) {
+            // 移位超过256位，结果为0
+            return Slices.wrappedBuffer(new byte[UINT256_BYTES]);
+        }
+
+        byte[] input = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, input);
+        BigInteger result = bigValue.shiftLeft((int) shiftBits);
+
+        // 检查溢出
+        if (result.bitLength() > 256) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("Left shift overflow: value would exceed 256 bits"));
+        }
+
+        return Slices.wrappedBuffer(toFixedUint256(result));
+    }
+
+    // 位运算：右移
+    @ScalarFunction("bitwise_right_shift")
+    @SqlType(UInt256Type.NAME)
+    public static Slice bitwiseRightShift(@SqlType(UInt256Type.NAME) Slice value, @SqlType(StandardTypes.BIGINT) long shiftBits)
+    {
+        if (shiftBits < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, "Shift amount cannot be negative");
+        }
+        if (shiftBits >= 256) {
+            // 移位超过256位，结果为0
+            return Slices.wrappedBuffer(new byte[UINT256_BYTES]);
+        }
+
+        byte[] input = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, input);
+        BigInteger result = bigValue.shiftRight((int) shiftBits);
+
+        return Slices.wrappedBuffer(toFixedUint256(result));
     }
 
     private static byte[] ensureUint256(Slice value) // 保证是32字节，不足左侧补0
