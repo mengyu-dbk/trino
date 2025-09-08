@@ -255,6 +255,116 @@ public final class UInt256Operators
     {
         return divide(castFromDoubleToUint256(left), right);
     }
+    /*
+        Trino 不支持自定义运算符函数覆盖内置的实现
+        io.trino.metadata.GlobalFunctionCatalog.checkNotSpecializedTypeOperator
+        以下是不支持的列表
+            1. EQUAL
+            2. IDENTICAL
+            3. INDETERMINATE
+            4. HASH_CODE
+            5. XX_HASH_64
+            6. COMPARISON_UNORDERED_FIRST
+            7. COMPARISON_UNORDERED_LAST
+            8. LESS_THAN
+            9. LESS_THAN_OR_EQUAL
+        因此以下的重载实现均无效
+
+    @ScalarOperator(LESS_THAN)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        return getBigInteger(left).compareTo(getBigInteger(right)) < 0;
+    }
+
+    @ScalarOperator(LESS_THAN)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            return false; // uint256 is always >= 0
+        }
+        return getBigInteger(left).compareTo(BigInteger.valueOf(right)) < 0;
+    }
+
+    @ScalarOperator(LESS_THAN)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThan(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        if (left < 0) {
+            return true; // uint256 is always >= 0
+        }
+        return BigInteger.valueOf(left).compareTo(getBigInteger(right)) < 0;
+    }
+
+    @ScalarOperator(LESS_THAN)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThan(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        if (right < 0) {
+            return false; // uint256 is always >= 0
+        }
+        return getBigInteger(left).compareTo(BigInteger.valueOf((long) Math.ceil(right))) < 0;
+    }
+
+    @ScalarOperator(LESS_THAN)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThan(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        if (left < 0) {
+            return true; // uint256 is always >= 0
+        }
+        return BigInteger.valueOf((long) Math.ceil(left)).compareTo(getBigInteger(right)) < 0;
+    }
+
+    @ScalarOperator(LESS_THAN_OR_EQUAL)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        int result = getBigInteger(left).compareTo(getBigInteger(right));
+        return result <= 0;
+    }
+
+    @ScalarOperator(LESS_THAN_OR_EQUAL)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.BIGINT) long right)
+    {
+        if (right < 0) {
+            return false; // uint256 is always >= 0
+        }
+        return getBigInteger(left).compareTo(BigInteger.valueOf(right)) <= 0;
+    }
+
+    @ScalarOperator(LESS_THAN_OR_EQUAL)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThanOrEqual(@SqlType(StandardTypes.BIGINT) long left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        if (left <= 0) {
+            return true; // uint256 is always >= 0
+        }
+        return BigInteger.valueOf(left).compareTo(getBigInteger(right)) <= 0;
+    }
+
+    @ScalarOperator(LESS_THAN_OR_EQUAL)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThanOrEqual(@SqlType(UInt256Type.NAME) Slice left, @SqlType(StandardTypes.DOUBLE) double right)
+    {
+        if (right < 0) {
+            return false; // uint256 is always >= 0
+        }
+        return getBigInteger(left).compareTo(BigInteger.valueOf((long) Math.ceil(right))) <= 0;
+    }
+
+    @ScalarOperator(LESS_THAN_OR_EQUAL)
+    @SqlType(StandardTypes.BOOLEAN)
+    public static boolean lessThanOrEqual(@SqlType(StandardTypes.DOUBLE) double left, @SqlType(UInt256Type.NAME) Slice right)
+    {
+        if (left <= 0) {
+            return true; // uint256 is always >= 0
+        }
+        return BigInteger.valueOf((long) Math.ceil(left)).compareTo(getBigInteger(right)) <= 0;
+    }
+     */
 
     // CAST(varbinary -> uint256)
     @ScalarOperator(CAST)
