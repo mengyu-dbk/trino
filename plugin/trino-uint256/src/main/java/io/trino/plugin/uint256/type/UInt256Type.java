@@ -119,16 +119,4 @@ public class UInt256Type
         }
         ((VariableWidthBlockBuilder) blockBuilder).writeEntry(value, offset, length);
     }
-
-    @Override
-    public boolean equals(Object other)
-    {
-        return other == UINT256;
-    }
-
-    @Override
-    public int hashCode()
-    {
-        return getClass().hashCode();
-    }
 }
