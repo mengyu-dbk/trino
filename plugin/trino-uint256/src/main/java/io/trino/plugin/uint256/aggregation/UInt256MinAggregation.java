@@ -15,11 +15,9 @@ package io.trino.plugin.uint256.aggregation;
 
 import io.airlift.slice.Slice;
 import io.trino.plugin.uint256.UInt256Operators;
-import io.trino.plugin.uint256.aggregation.state.UInt256CountAndSumState;
 import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.function.AggregationFunction;
-import io.trino.spi.function.AggregationState;
 import io.trino.spi.function.CombineFunction;
 import io.trino.spi.function.InputFunction;
 import io.trino.spi.function.OutputFunction;
@@ -27,47 +25,55 @@ import io.trino.spi.function.SqlType;
 
 import static io.trino.plugin.uint256.type.UInt256Type.UINT256;
 
-@AggregationFunction("sum")
-public final class UInt256SumAggregation
+@AggregationFunction("min")
+public final class UInt256MinAggregation
 {
-    private static final UInt256Type type = UINT256;
-
-    private UInt256SumAggregation() {}
+    private UInt256MinAggregation() {}
 
     @InputFunction
-    public static void sum(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
+    public static void input(State state, @SqlType(UInt256Type.NAME) Slice value)
     {
-        Slice current = state.getSum();
-        if (current == null) {
-            state.setSum(value);
+        if (state.value == null) {
+            state.value = value;
         }
         else {
-            // 溢出由 add 内部抛错
-            state.setSum(UInt256Operators.add(current, value));
+            if (UInt256Operators.getBigInteger(value).compareTo(UInt256Operators.getBigInteger(state.value)) < 0) {
+                state.value = value;
+            }
         }
-        state.setCount(state.getCount() + 1);
     }
 
     @CombineFunction
-    public static void combine(@AggregationState UInt256CountAndSumState state, @AggregationState UInt256CountAndSumState otherState)
+    public static void combine(State state, State other)
     {
-        if (state.getSum() == null) {
-            state.setSum(otherState.getSum());
+        if (state.value == null) {
+            state.value = other.value;
         }
-        else if (otherState.getSum() != null) {
-            state.setSum(UInt256Operators.add(state.getSum(), otherState.getSum()));
+        else if (other.value != null && UInt256Operators.getBigInteger(other.value).compareTo(UInt256Operators.getBigInteger(state.value)) < 0) {
+            state.value = other.value;
         }
-        state.setCount(state.getCount() + otherState.getCount());
     }
 
     @OutputFunction(UInt256Type.NAME)
-    public static void output(@AggregationState UInt256CountAndSumState state, BlockBuilder out)
+    public static void output(State state, BlockBuilder out)
     {
-        if (state.getCount() == 0) {
+        if (state.value == null) {
             out.appendNull();
         }
         else {
-            type.writeSlice(out, state.getSum());
+            UINT256.writeSlice(out, state.value);
+        }
+    }
+
+    public static class State
+            implements io.trino.spi.function.AccumulatorState
+    {
+        private Slice value;
+
+        @Override
+        public long getEstimatedSize()
+        {
+            return value == null ? 0 : value.getRetainedSize();
         }
     }
 }

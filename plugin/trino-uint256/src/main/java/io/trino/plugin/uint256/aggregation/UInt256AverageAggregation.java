@@ -27,47 +27,50 @@ import io.trino.spi.function.SqlType;
 
 import static io.trino.plugin.uint256.type.UInt256Type.UINT256;
 
-@AggregationFunction("sum")
-public final class UInt256SumAggregation
+@AggregationFunction("avg")
+public final class UInt256AverageAggregation
 {
-    private static final UInt256Type type = UINT256;
-
-    private UInt256SumAggregation() {}
+    private UInt256AverageAggregation() {}
 
     @InputFunction
-    public static void sum(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
+    public static void input(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
     {
-        Slice current = state.getSum();
-        if (current == null) {
+        state.setCount(state.getCount() + 1);
+        if (state.getSum() == null) {
             state.setSum(value);
         }
         else {
-            // 溢出由 add 内部抛错
-            state.setSum(UInt256Operators.add(current, value));
+            state.setSum(UInt256Operators.add(state.getSum(), value));
         }
-        state.setCount(state.getCount() + 1);
     }
 
     @CombineFunction
     public static void combine(@AggregationState UInt256CountAndSumState state, @AggregationState UInt256CountAndSumState otherState)
     {
+        state.setCount(state.getCount() + otherState.getCount());
         if (state.getSum() == null) {
             state.setSum(otherState.getSum());
         }
         else if (otherState.getSum() != null) {
             state.setSum(UInt256Operators.add(state.getSum(), otherState.getSum()));
         }
-        state.setCount(state.getCount() + otherState.getCount());
     }
 
     @OutputFunction(UInt256Type.NAME)
     public static void output(@AggregationState UInt256CountAndSumState state, BlockBuilder out)
     {
-        if (state.getCount() == 0) {
+        long count = state.getCount();
+        if (count == 0) {
             out.appendNull();
+            return;
         }
-        else {
-            type.writeSlice(out, state.getSum());
+        Slice sum = state.getSum();
+        if (sum == null) {
+            out.appendNull();
+            return;
         }
+        Slice countAsUint256 = UInt256Operators.castFromBigintToUint256(count);
+        Slice average = UInt256Operators.divide(sum, countAsUint256);
+        UINT256.writeSlice(out, average);
     }
 }
