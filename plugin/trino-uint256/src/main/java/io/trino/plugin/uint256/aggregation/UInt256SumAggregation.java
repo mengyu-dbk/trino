@@ -30,33 +30,21 @@ import static io.trino.plugin.uint256.type.UInt256Type.UINT256;
 @AggregationFunction("sum")
 public final class UInt256SumAggregation
 {
-    private static final UInt256Type type = UINT256;
+    private static final UInt256Type type = UINT256.UINT256;
 
     private UInt256SumAggregation() {}
 
     @InputFunction
     public static void sum(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
     {
-        Slice current = state.getSum();
-        if (current == null) {
-            state.setSum(value);
-        }
-        else {
-            // 溢出由 add 内部抛错
-            state.setSum(UInt256Operators.add(current, value));
-        }
+        state.setSum(state.getSum() + UInt256Operators.getLong(value));
         state.setCount(state.getCount() + 1);
     }
 
     @CombineFunction
     public static void combine(@AggregationState UInt256CountAndSumState state, @AggregationState UInt256CountAndSumState otherState)
     {
-        if (state.getSum() == null) {
-            state.setSum(otherState.getSum());
-        }
-        else if (otherState.getSum() != null) {
-            state.setSum(UInt256Operators.add(state.getSum(), otherState.getSum()));
-        }
+        state.setSum(state.getSum() + otherState.getSum());
         state.setCount(state.getCount() + otherState.getCount());
     }
 
@@ -67,7 +55,7 @@ public final class UInt256SumAggregation
             out.appendNull();
         }
         else {
-            type.writeSlice(out, state.getSum());
+            type.writeSlice(out, UInt256Operators.castFromBigintToUint256(state.getSum()));
         }
     }
 }
