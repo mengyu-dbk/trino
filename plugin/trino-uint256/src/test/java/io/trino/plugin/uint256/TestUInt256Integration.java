@@ -454,4 +454,60 @@ public class TestUInt256Integration
         assertQueryReturnsEmptyResult(
                 "SELECT value % CAST(from_hex('03') AS UINT256) FROM memory.default.uint256_modulus_null WHERE id = 2 AND value IS NOT NULL");
     }
+
+    @Test
+    public void testAggregationsBasic()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_agg (g INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_agg VALUES " +
+                "(1, CAST(from_hex('01') AS UINT256))," +
+                "(1, CAST(from_hex('02') AS UINT256))," +
+                "(1, NULL)," +
+                "(2, CAST(from_hex('10') AS UINT256))," +
+                "(2, CAST(from_hex('20') AS UINT256))", 5);
+
+        // sum = 0x03 for group 1, 0x30 for group 2
+        assertQueryOrdered(
+                "SELECT g, to_hex(CAST(sum(v) AS varbinary)) FROM memory.default.uint256_agg GROUP BY g ORDER BY g",
+                "VALUES (1, '0000000000000000000000000000000000000000000000000000000000000003')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000030')");
+
+        // min/max
+        assertQueryOrdered(
+                "SELECT g, to_hex(CAST(min(v) AS varbinary)), to_hex(CAST(max(v) AS varbinary)) FROM memory.default.uint256_agg GROUP BY g ORDER BY g",
+                "VALUES (1, '0000000000000000000000000000000000000000000000000000000000000001', '0000000000000000000000000000000000000000000000000000000000000002')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000010', '0000000000000000000000000000000000000000000000000000000000000020')");
+
+        // avg = floor((1+2)/2)=1 for group 1; (16+32)/2=24 for group 2
+        assertQueryOrdered(
+                "SELECT g, to_hex(CAST(avg(v) AS varbinary)) FROM memory.default.uint256_agg GROUP BY g ORDER BY g",
+                "VALUES (1, '0000000000000000000000000000000000000000000000000000000000000001')," +
+                        "(2, '0000000000000000000000000000000000000000000000000000000000000018')");
+    }
+
+    @Test
+    public void testSumOverflow()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_agg_over (v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_agg_over VALUES " +
+                "(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256))," +
+                "(CAST(from_hex('01') AS UINT256))", 2);
+
+        assertQueryFails(
+                "SELECT sum(v) FROM memory.default.uint256_agg_over",
+                ".*uint256 addition overflow.*");
+    }
+    /*
+    @Test
+    public void testAggregationsNulls()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_agg_nulls (v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_agg_nulls VALUES (NULL)", 1);
+
+        assertQuery("SELECT sum(v) FROM memory.default.uint256_agg_nulls", "VALUES NULL");
+        assertQuery("SELECT min(v) FROM memory.default.uint256_agg_nulls", "VALUES NULL");
+        assertQuery("SELECT max(v) FROM memory.default.uint256_agg_nulls", "VALUES NULL");
+        assertQuery("SELECT avg(v) FROM memory.default.uint256_agg_nulls", "VALUES NULL");
+    }
+     */
 }
