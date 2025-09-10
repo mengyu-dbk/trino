@@ -103,11 +103,11 @@ public class TestUInt256Query
                 .isInstanceOf(IllegalArgumentException.class);
 
         // 验证Object值
-        Object objectValue = uint256Type.getObjectValue(block, 0);
+        Object objectValue = uint256Type.getObjectValue(null, block, 0);
         assertThat(objectValue).isNotNull();
         assertThat(objectValue).isEqualTo(testData);
 
-        Object objectValue2 = uint256Type.getObjectValue(block, 1);
+        Object objectValue2 = uint256Type.getObjectValue(null, block, 1);
         assertThat(objectValue2).isNotNull();
         assertThat(objectValue2).isEqualTo(testData2);
 
@@ -126,7 +126,7 @@ public class TestUInt256Query
         Block block = blockBuilder.build();
         assertThat(block.isNull(0)).isTrue();
 
-        Object objectValue = uint256Type.getObjectValue(block, 0);
+        Object objectValue = uint256Type.getObjectValue(null, block, 0);
         assertThat(objectValue).isNull();
     }
 
