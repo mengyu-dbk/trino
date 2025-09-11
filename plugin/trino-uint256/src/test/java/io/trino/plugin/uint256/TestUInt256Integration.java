@@ -240,33 +240,33 @@ public class TestUInt256Integration
                 "SELECT CAST(CAST(nan() AS DOUBLE) AS UINT256)",
                 ".*Cannot cast non-finite DOUBLE value.*");
     }
-/*
+
     @Test
-    public void testDecimalToUint256Cast()
+    public void testLongDecimalToUint256Cast()
     {
-        assertUpdate("CREATE TABLE memory.default.uint256_decimal (id INTEGER, v UINT256)");
-        assertUpdate("INSERT INTO memory.default.uint256_decimal VALUES " +
-                "(1, CAST(CAST(123 AS DECIMAL(10,0)) AS UINT256))," +
-                "(2, CAST(CAST(0 AS DECIMAL(10,0)) AS UINT256))," +
-                "(3, CAST(CAST(999999999 AS DECIMAL(10,0)) AS UINT256))", 3);
+        assertUpdate("CREATE TABLE memory.default.uint256_long_decimal (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_long_decimal VALUES " +
+                "(1, CAST(CAST(123 AS DECIMAL(30,0)) AS UINT256))," +
+                "(2, CAST(CAST(0 AS DECIMAL(30,0)) AS UINT256))," +
+                "(3, CAST(CAST(999999999 AS DECIMAL(30,0)) AS UINT256))", 3);
 
         assertQueryOrdered(
-                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_decimal ORDER BY id",
+                "SELECT id, to_hex(CAST(v AS varbinary)) FROM memory.default.uint256_long_decimal ORDER BY id",
                 "VALUES (1, '000000000000000000000000000000000000000000000000000000000000007B')," +
                         "(2, '0000000000000000000000000000000000000000000000000000000000000000')," +
                         "(3, '000000000000000000000000000000000000000000000000000000003B9AC9FF')");
 
         // Test negative decimal cast failure
         assertQueryFails(
-                "SELECT CAST(CAST(-1 AS DECIMAL(10,0)) AS UINT256)",
+                "SELECT CAST(CAST(-1 AS DECIMAL(20,0)) AS UINT256)",
                 ".*Cannot cast negative DECIMAL value.*");
 
         // Test non-integer decimal cast failure
         assertQueryFails(
-                "SELECT CAST(CAST(123.5 AS DECIMAL(10,1)) AS UINT256)",
+                "SELECT CAST(CAST(123.5 AS DECIMAL(20,1)) AS UINT256)",
                 ".*Cannot cast non-integer DECIMAL value.*");
     }
-*/
+
     @Test
     public void testImplicitConversionsWithArithmetic()
     {
@@ -453,5 +453,119 @@ public class TestUInt256Integration
         // Test NULL % value and value % NULL both return NULL
         assertQueryReturnsEmptyResult(
                 "SELECT value % CAST(from_hex('03') AS UINT256) FROM memory.default.uint256_modulus_null WHERE id = 2 AND value IS NOT NULL");
+    }
+
+    @Test
+    public void testUint256ToNumericCasts()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_to_numeric (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_to_numeric VALUES " +
+                "(1, CAST(from_hex('7B') AS UINT256))," + // 123
+                "(2, CAST(from_hex('00') AS UINT256))," + // 0
+                "(3, CAST(from_hex('7FFFFFFF') AS UINT256))," + // Integer.MAX_VALUE
+                "(4, CAST(from_hex('7FFF') AS UINT256))," + // Short.MAX_VALUE
+                "(5, CAST(from_hex('7F') AS UINT256))", 5); // Byte.MAX_VALUE
+
+        // Test UINT256 -> BIGINT
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS BIGINT) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2) ORDER BY id",
+                "VALUES (1, 123), (2, 0)");
+
+        // Test UINT256 -> INTEGER
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS INTEGER) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2, 3) ORDER BY id",
+                "VALUES (1, 123), (2, 0), (3, 2147483647)");
+
+        // Test UINT256 -> SMALLINT
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS SMALLINT) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2, 4) ORDER BY id",
+                "VALUES (1, 123), (2, 0), (4, 32767)");
+
+        // Test UINT256 -> TINYINT
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS TINYINT) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2, 5) ORDER BY id",
+                "VALUES (1, 123), (2, 0), (5, 127)");
+
+        // Test UINT256 -> REAL
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS REAL) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2) ORDER BY id",
+                "VALUES (1, 123.0), (2, 0.0)");
+
+        // Test UINT256 -> DOUBLE
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS DOUBLE) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2) ORDER BY id",
+                "VALUES (1, 123.0), (2, 0.0)");
+
+        // Test UINT256 -> LONG DECIMAL
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS DECIMAL(38,0)) FROM memory.default.uint256_to_numeric WHERE id IN (1, 2) ORDER BY id",
+                "VALUES (1, 123), (2, 0)");
+
+        // Test overflow cases
+        assertQueryFails(
+                "SELECT CAST(CAST(from_hex('8000000000000000') AS UINT256) AS BIGINT)",
+                ".*UINT256 value too large for BIGINT.*");
+
+        assertQueryFails(
+                "SELECT CAST(CAST(from_hex('80000000') AS UINT256) AS INTEGER)",
+                ".*UINT256 value too large for INTEGER.*");
+
+        assertQueryFails(
+                "SELECT CAST(CAST(from_hex('8000') AS UINT256) AS SMALLINT)",
+                ".*UINT256 value too large for SMALLINT.*");
+
+        assertQueryFails(
+                "SELECT CAST(CAST(from_hex('80') AS UINT256) AS TINYINT)",
+                ".*UINT256 value too large for TINYINT.*");
+    }
+
+    @Test
+    public void testUint256ToLongDecimalWithScale()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_to_long_decimal_scale (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_to_long_decimal_scale VALUES " +
+                "(1, CAST(from_hex('7B') AS UINT256))," + // 123
+                "(2, CAST(from_hex('2710') AS UINT256))", 2); // 10000
+
+        // Test with different scales (long decimal)
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS DECIMAL(20,2)) FROM memory.default.uint256_to_long_decimal_scale ORDER BY id",
+                "VALUES (1, 123.00), (2, 10000.00)"); // 123 -> 123.00, 10000 -> 10000.00
+
+        assertQueryOrdered(
+                "SELECT id, CAST(v AS DECIMAL(20,1)) FROM memory.default.uint256_to_long_decimal_scale ORDER BY id",
+                "VALUES (1, 123.0), (2, 10000.0)"); // 123 -> 123.0, 10000 -> 10000.0
+    }
+
+    @Test
+    public void testUint256ToNumericEdgeCases()
+    {
+        // Test maximum values that fit in each type
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('7FFFFFFFFFFFFFFF') AS UINT256) AS BIGINT)",
+                "VALUES 9223372036854775807"); // Long.MAX_VALUE
+
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('7FFFFFFF') AS UINT256) AS INTEGER)",
+                "VALUES 2147483647"); // Integer.MAX_VALUE
+
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('7FFF') AS UINT256) AS SMALLINT)",
+                "VALUES 32767"); // Short.MAX_VALUE
+
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('7F') AS UINT256) AS TINYINT)",
+                "VALUES 127"); // Byte.MAX_VALUE
+
+        // Test zero conversion
+        assertQuery(
+                "SELECT CAST(CAST(from_hex('00') AS UINT256) AS BIGINT), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS INTEGER), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS SMALLINT), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS TINYINT), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS REAL), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS DOUBLE), " +
+                "CAST(CAST(from_hex('00') AS UINT256) AS DECIMAL(38,0))",
+                "VALUES (0, 0, 0, 0, 0.0, 0.0, 0)");
     }
 }
