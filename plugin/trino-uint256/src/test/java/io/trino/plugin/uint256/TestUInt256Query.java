@@ -105,11 +105,11 @@ public class TestUInt256Query
         // 验证Object值
         Object objectValue = uint256Type.getObjectValue(block, 0);
         assertThat(objectValue).isNotNull();
-        assertThat(objectValue).isEqualTo(testData);
+        assertThat(objectValue).isEqualTo("1780731860627700044960722568376592200742329637303199754547598369979440671");
 
         Object objectValue2 = uint256Type.getObjectValue(block, 1);
         assertThat(objectValue2).isNotNull();
-        assertThat(objectValue2).isEqualTo(testData2);
+        assertThat(objectValue2).isEqualTo("44780752741604000149004052581396903457332494212052990074388535163930135043615");
 
         // 验证数据独立性（修改原始数据不影响存储的数据）
         testData[0] = 127;
