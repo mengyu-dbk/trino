@@ -14,6 +14,7 @@
 package io.trino.plugin.uint256.type;
 
 import io.airlift.slice.Slice;
+import io.trino.plugin.uint256.UInt256Operators;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.BlockBuilderStatus;
@@ -72,7 +73,10 @@ public class UInt256Type
         if (block.isNull(position)) {
             return null;
         }
-        return getSlice(block, position).getBytes();
+        var result = getSlice(block, position);
+        var b = UInt256Operators.getBigInteger(result);
+        var s = b.toString();
+        return s;
     }
 
     @Override

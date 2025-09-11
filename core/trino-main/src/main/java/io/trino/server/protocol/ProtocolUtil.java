@@ -63,6 +63,7 @@ import static io.trino.spi.type.StandardTypes.TIME;
 import static io.trino.spi.type.StandardTypes.TIMESTAMP;
 import static io.trino.spi.type.StandardTypes.TIMESTAMP_WITH_TIME_ZONE;
 import static io.trino.spi.type.StandardTypes.TIME_WITH_TIME_ZONE;
+import static io.trino.spi.type.StandardTypes.VARCHAR;
 import static io.trino.util.Failures.toFailure;
 import static java.lang.String.format;
 
@@ -126,6 +127,9 @@ public final class ProtocolUtil
 
     private static ClientTypeSignature toClientTypeSignature(TypeSignature signature, boolean supportsParametricDateTime)
     {
+        if (signature.getBase().equalsIgnoreCase("uint256")) {
+            return new ClientTypeSignature(VARCHAR);
+        }
         if (!supportsParametricDateTime) {
             if (signature.getBase().equalsIgnoreCase(TIMESTAMP)) {
                 return new ClientTypeSignature(TIMESTAMP);
