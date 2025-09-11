@@ -20,16 +20,33 @@ import org.junit.jupiter.api.Test;
 import java.math.BigInteger;
 
 import static io.trino.plugin.uint256.UInt256Operators.castFromBigintToUint256;
+import static io.trino.plugin.uint256.UInt256Operators.castFromBooleanToUint256;
 import static io.trino.plugin.uint256.UInt256Operators.castFromDoubleToUint256;
 import static io.trino.plugin.uint256.UInt256Operators.castFromIntegerToUint256;
 import static io.trino.plugin.uint256.UInt256Operators.castFromRealToUint256;
 import static io.trino.plugin.uint256.UInt256Operators.castFromSmallintToUint256;
 import static io.trino.plugin.uint256.UInt256Operators.castFromTinyintToUint256;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToBigint;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToDouble;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToInteger;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToReal;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToSmallint;
+import static io.trino.plugin.uint256.UInt256Operators.castFromUint256ToTinyint;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TestUInt256NumericCasts
 {
+    @Test
+    public void testCastFromBoolean()
+    {
+        Slice one = castFromBooleanToUint256(true);
+        assertThat(toUint256BigInteger(one)).isEqualTo(BigInteger.ONE);
+
+        Slice zero = castFromBooleanToUint256(false);
+        assertThat(toUint256BigInteger(zero)).isEqualTo(BigInteger.ZERO);
+    }
+
     @Test
     public void testCastFromTinyint()
     {
@@ -204,37 +221,7 @@ public class TestUInt256NumericCasts
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("Cannot cast non-finite DOUBLE value");
     }
-/*
-    @Test
-    public void testCastFromDecimal()
-    {
-        // Test positive integer decimal (scale 0)
-        Slice result = castFromDecimalToUint256(123L, 10, 0);
-        assertThat(toUint256BigInteger(result)).isEqualTo(BigInteger.valueOf(123));
 
-        // Test zero
-        result = castFromDecimalToUint256(0L, 10, 0);
-        assertThat(toUint256BigInteger(result)).isEqualTo(BigInteger.ZERO);
-
-        // Test large decimal value
-        result = castFromDecimalToUint256(999999999L, 10, 0);
-        assertThat(toUint256BigInteger(result)).isEqualTo(BigInteger.valueOf(999999999));
-
-        // Test decimal with scale but integer value (12.0)
-        result = castFromDecimalToUint256(120L, 10, 1); // 120 with scale 1 = 12.0
-        assertThat(toUint256BigInteger(result)).isEqualTo(BigInteger.valueOf(12));
-
-        // Test negative decimal throws exception
-        assertThatThrownBy(() -> castFromDecimalToUint256(-123L, 10, 0))
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Cannot cast negative DECIMAL value");
-
-        // Test non-integer decimal throws exception (12.5)
-        assertThatThrownBy(() -> castFromDecimalToUint256(125L, 10, 1)) // 125 with scale 1 = 12.5
-                .isInstanceOf(TrinoException.class)
-                .hasMessageContaining("Cannot cast non-integer DECIMAL value");
-    }
-*/
     @Test
     public void testBoundaryValues()
     {
@@ -273,6 +260,181 @@ public class TestUInt256NumericCasts
         assertThat(toUint256BigInteger(result)).isEqualTo(new BigInteger("1606938044258990300000000000000000000000000000000000000000000"));
     }
 
+    @Test
+    public void testCastFromUint256ToBigint()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(123L);
+        long result = castFromUint256ToBigint(smallValue);
+        assertThat(result).isEqualTo(123L);
+
+        // Test zero
+        Slice zeroValue = uint256FromLong(0L);
+        result = castFromUint256ToBigint(zeroValue);
+        assertThat(result).isEqualTo(0L);
+
+        // Test max bigint value
+        Slice maxBigintValue = uint256FromLong(Long.MAX_VALUE);
+        result = castFromUint256ToBigint(maxBigintValue);
+        assertThat(result).isEqualTo(Long.MAX_VALUE);
+
+        // Test value too large for bigint
+        Slice tooLargeValue = uint256FromBigInteger(BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE));
+        assertThatThrownBy(() -> castFromUint256ToBigint(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for BIGINT");
+    }
+
+    @Test
+    public void testCastFromUint256ToInteger()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(123L);
+        long result = castFromUint256ToInteger(smallValue);
+        assertThat(result).isEqualTo(123L);
+
+        // Test max integer value
+        Slice maxIntValue = uint256FromLong(Integer.MAX_VALUE);
+        result = castFromUint256ToInteger(maxIntValue);
+        assertThat(result).isEqualTo(Integer.MAX_VALUE);
+
+        // Test value too large for integer
+        Slice tooLargeValue = uint256FromLong(Integer.MAX_VALUE + 1L);
+        assertThatThrownBy(() -> castFromUint256ToInteger(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for INTEGER");
+    }
+
+    @Test
+    public void testCastFromUint256ToSmallint()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(123L);
+        long result = castFromUint256ToSmallint(smallValue);
+        assertThat(result).isEqualTo(123L);
+
+        // Test max smallint value
+        Slice maxSmallintValue = uint256FromLong(Short.MAX_VALUE);
+        result = castFromUint256ToSmallint(maxSmallintValue);
+        assertThat(result).isEqualTo(Short.MAX_VALUE);
+
+        // Test value too large for smallint
+        Slice tooLargeValue = uint256FromLong(Short.MAX_VALUE + 1L);
+        assertThatThrownBy(() -> castFromUint256ToSmallint(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for SMALLINT");
+    }
+
+    @Test
+    public void testCastFromUint256ToTinyint()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(42L);
+        long result = castFromUint256ToTinyint(smallValue);
+        assertThat(result).isEqualTo(42L);
+
+        // Test max tinyint value
+        Slice maxTinyintValue = uint256FromLong(Byte.MAX_VALUE);
+        result = castFromUint256ToTinyint(maxTinyintValue);
+        assertThat(result).isEqualTo(Byte.MAX_VALUE);
+
+        // Test value too large for tinyint
+        Slice tooLargeValue = uint256FromLong(Byte.MAX_VALUE + 1L);
+        assertThatThrownBy(() -> castFromUint256ToTinyint(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for TINYINT");
+    }
+
+    @Test
+    public void testCastFromUint256ToReal()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(123L);
+        long result = castFromUint256ToReal(smallValue);
+        float floatValue = Float.intBitsToFloat((int) result);
+        assertThat(floatValue).isEqualTo(123.0f);
+
+        // Test max value that fits in float
+        Slice maxFloatValue = uint256FromLong(16777215L); // 2^24 -1
+        result = castFromUint256ToReal(maxFloatValue);
+        floatValue = Float.intBitsToFloat((int) result);
+        assertThat(floatValue).isEqualTo(16777215.0f);
+
+        // Test value too large for float
+        Slice tooLargeValue = uint256FromLong(16777216L); // 2^24
+        assertThatThrownBy(() -> castFromUint256ToReal(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for REAL");
+    }
+
+    @Test
+    public void testCastFromUint256ToDouble()
+    {
+        // Test small value
+        Slice smallValue = uint256FromLong(123L);
+        double result = castFromUint256ToDouble(smallValue);
+        assertThat(result).isEqualTo(123.0);
+
+        // Test max value that fits in double
+        Slice maxDoubleValue = uint256FromBigInteger(BigInteger.valueOf(2).pow(53).subtract(BigInteger.ONE));
+        result = castFromUint256ToDouble(maxDoubleValue);
+        assertThat(result).isEqualTo(Math.pow(2, 53) - 1);
+
+        // Test value too large for double
+        Slice tooLargeValue = uint256FromBigInteger(BigInteger.valueOf(2).pow(53));
+        assertThatThrownBy(() -> castFromUint256ToDouble(tooLargeValue))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for DOUBLE");
+    }
+/*
+    @Test
+    public void testCastFromUint256ToShortDecimal()
+    {
+        // Test small value with scale 0
+        Slice smallValue = uint256FromLong(123L);
+        long result = castFromUint256ToShortDecimal(smallValue, 10, 0);
+        assertThat(result).isEqualTo(123L);
+
+        // Test value with scale 2
+        Slice valueWithScale = uint256FromLong(12345L);
+        result = castFromUint256ToShortDecimal(valueWithScale, 10, 2);
+        assertThat(result).isEqualTo(1234500L); // 12345 * 100
+
+        // Test value too large for short decimal precision
+        Slice largeValue = uint256FromBigInteger(BigInteger.valueOf(10).pow(10)); // 10^10
+        assertThatThrownBy(() -> castFromUint256ToShortDecimal(largeValue, 5, 0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for DECIMAL");
+
+        // Test value too large for long (short decimal)
+        Slice tooLargeForLong = uint256FromBigInteger(BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE));
+        assertThatThrownBy(() -> castFromUint256ToShortDecimal(tooLargeForLong, 20, 0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for short DECIMAL");
+    }
+
+    @Test
+    public void testCastFromUint256ToLongDecimal()
+    {
+        // Test small value with scale 0
+        Slice smallValue = uint256FromLong(123L);
+        Slice result = castFromUint256ToLongDecimal(smallValue, 20, 0);
+        BigInteger decimalValue = io.trino.spi.type.Decimals.decodeUnscaledValue(result);
+        assertThat(decimalValue).isEqualTo(BigInteger.valueOf(123));
+
+        // Test value with scale 2
+        Slice valueWithScale = uint256FromLong(12345L);
+        result = castFromUint256ToLongDecimal(valueWithScale, 20, 2);
+        decimalValue = io.trino.spi.type.Decimals.decodeUnscaledValue(result);
+        assertThat(decimalValue).isEqualTo(BigInteger.valueOf(1234500)); // 12345 * 100
+
+        // Test value too large for decimal precision
+        Slice largeValue = uint256FromBigInteger(BigInteger.valueOf(10).pow(10)); // 10^10
+        assertThatThrownBy(() -> castFromUint256ToLongDecimal(largeValue, 5, 0))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("UINT256 value too large for DECIMAL");
+    }
+*/
     /**
      * Helper method to convert a UInt256 Slice back to BigInteger for testing
      */
@@ -280,5 +442,47 @@ public class TestUInt256NumericCasts
     {
         byte[] bytes = slice.getBytes();
         return new BigInteger(1, bytes); // 1 means positive
+    }
+
+    /**
+     * Helper method to create a UInt256 from a long value
+     */
+    private Slice uint256FromLong(long value)
+    {
+        return castFromBigintToUint256(value);
+    }
+
+    /**
+     * Helper method to create a UInt256 from a BigInteger value
+     */
+    private Slice uint256FromBigInteger(BigInteger value)
+    {
+        return io.airlift.slice.Slices.wrappedBuffer(toFixedUint256(value));
+    }
+
+    /**
+     * Helper method to convert BigInteger to fixed 32-byte UInt256 format
+     */
+    private byte[] toFixedUint256(BigInteger value)
+    {
+        if (value.signum() < 0 || value.bitLength() > 256) {
+            throw new IllegalArgumentException("Value out of range for UInt256");
+        }
+        byte[] tmp = value.toByteArray();
+        if (tmp.length == 0) {
+            return new byte[32];
+        }
+        // strip possible leading sign byte 0x00
+        int offset = 0;
+        if (tmp.length > 1 && tmp[0] == 0) {
+            offset = 1;
+        }
+        int len = tmp.length - offset;
+        if (len > 32) {
+            throw new IllegalArgumentException("Value out of range for UInt256");
+        }
+        byte[] out = new byte[32];
+        System.arraycopy(tmp, offset, out, 32 - len, len);
+        return out;
     }
 }

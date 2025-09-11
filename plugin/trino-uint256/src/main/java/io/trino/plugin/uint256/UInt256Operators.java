@@ -17,10 +17,12 @@ import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
+import io.trino.spi.function.LiteralParameter;
 import io.trino.spi.function.LiteralParameters;
 import io.trino.spi.function.ScalarFunction;
 import io.trino.spi.function.ScalarOperator;
 import io.trino.spi.function.SqlType;
+import io.trino.spi.type.Int128;
 import io.trino.spi.type.StandardTypes;
 
 import java.math.BigInteger;
@@ -437,7 +439,51 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(toFixedUint256(bigValue));
     }
 
-    // CAST(varchar -> uint256) : 只支持十进制字符串转换
+    // CAST(short decimal -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromShortDecimalToUint256(@SqlType("decimal") long input)
+    {
+        // Convert short decimal to BigInteger
+        BigInteger decimalValue = BigInteger.valueOf(input);
+        return Slices.wrappedBuffer(toFixedUint256(decimalValue));
+    }
+
+    // CAST(long decimal -> uint256)
+    @ScalarOperator(CAST)
+    @LiteralParameters({"p", "s"})
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromLongDecimalToUint256(@LiteralParameter("p") long precision, @LiteralParameter("s") long scale, @SqlType("decimal(p,s)") Int128 input)
+    {
+        // Convert long decimal to BigInteger
+        BigInteger decimalValue = input.toBigInteger();
+
+        // Check if the decimal has non-zero fractional part
+        if (scale > 0) {
+            // For decimal with scale > 0, we need to check if the fractional part is zero
+            // This is done by checking if the value is divisible by 10^scale
+            BigInteger scaleFactor = BigInteger.TEN.pow((int) scale);
+            if (!decimalValue.remainder(scaleFactor).equals(BigInteger.ZERO)) {
+                throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast non-integer DECIMAL value to UINT256"));
+            }
+            // Remove the scale factor to get the integer part
+            decimalValue = decimalValue.divide(scaleFactor);
+        }
+
+        // Check if the value is negative
+        if (decimalValue.signum() < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, format("Cannot cast negative DECIMAL value to UINT256"));
+        }
+
+        // Check if the value fits in uint256
+        if (decimalValue.bitLength() > 256) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE, format("DECIMAL value too large for UINT256"));
+        }
+
+        return Slices.wrappedBuffer(toFixedUint256(decimalValue));
+    }
+
+    // CAST(varchar -> uint256) : 只支持十进制字符��转换
     @ScalarOperator(CAST)
     @LiteralParameters("x")
     @SqlType(UInt256Type.NAME)
@@ -460,6 +506,25 @@ public final class UInt256Operators
     {
         byte[] bytes = ensureUint256(value);
         return Slices.wrappedBuffer(new BigInteger(1, bytes).toString(10).getBytes(StandardCharsets.UTF_8));
+    }
+
+    // CAST(uint256 -> long decimal)
+    @ScalarOperator(CAST)
+    @LiteralParameters({"p", "s"})
+    @SqlType("decimal(p,s)")
+    public static Int128 castFromUint256ToLongDecimal(@LiteralParameter("p") long precision, @LiteralParameter("s") long scale, @SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger uint256Value = new BigInteger(1, bytes);
+
+        // Check if the value fits in the specified decimal precision
+        if (uint256Value.toString().length() > precision - scale) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for DECIMAL(%d,%d)", precision, scale));
+        }
+
+        uint256Value = uint256Value.multiply(BigInteger.valueOf(10).pow((int) scale));
+        return Int128.valueOf(uint256Value);
     }
 
     // Convenience constructor function: uint256(varbinary)
@@ -491,6 +556,118 @@ public final class UInt256Operators
                 (byte) ((input >>> 8) & 0xFF),
                 (byte) (input & 0xFF)
         }));
+    }
+
+    // CAST(uint256 -> bigint)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.BIGINT)
+    public static long castFromUint256ToBigint(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in a long
+        if (bigValue.bitLength() > 63) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for BIGINT: %s", bigValue.toString()));
+        }
+
+        return bigValue.longValue();
+    }
+
+    // CAST(uint256 -> integer)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.INTEGER)
+    public static long castFromUint256ToInteger(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in an integer (32-bit signed)
+        if (bigValue.bitLength() > 31) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for INTEGER: %s", bigValue.toString()));
+        }
+
+        return bigValue.intValue();
+    }
+
+    // CAST(uint256 -> smallint)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.SMALLINT)
+    public static long castFromUint256ToSmallint(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in a smallint (16-bit signed)
+        if (bigValue.bitLength() > 15) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for SMALLINT: %s", bigValue.toString()));
+        }
+
+        return bigValue.shortValue();
+    }
+
+    // CAST(uint256 -> tinyint)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.TINYINT)
+    public static long castFromUint256ToTinyint(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in a tinyint (8-bit signed)
+        if (bigValue.bitLength() > 7) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for TINYINT: %s", bigValue.toString()));
+        }
+
+        return bigValue.byteValue();
+    }
+
+    // CAST(uint256 -> real)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.REAL)
+    public static long castFromUint256ToReal(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in a float
+        if (bigValue.bitLength() > 24) { // float has 24 bits of precision
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for REAL: %s", bigValue.toString()));
+        }
+
+        float floatValue = bigValue.floatValue();
+        return Float.floatToIntBits(floatValue);
+    }
+
+    // CAST(uint256 -> double)
+    @ScalarOperator(CAST)
+    @SqlType(StandardTypes.DOUBLE)
+    public static double castFromUint256ToDouble(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // Check if the value fits in a double
+        if (bigValue.bitLength() > 53) { // double has 53 bits of precision
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("UINT256 value too large for DOUBLE: %s", bigValue.toString()));
+        }
+
+        return bigValue.doubleValue();
+    }
+
+    // CAST(boolean -> uint256)
+    @ScalarOperator(CAST)
+    @SqlType(UInt256Type.NAME)
+    public static Slice castFromBooleanToUint256(@SqlType(StandardTypes.BOOLEAN) boolean input)
+    {
+        // false -> 0, true -> 1
+        return input ? uint256(1L) : uint256(0L);
     }
 
     // 位运算：与
