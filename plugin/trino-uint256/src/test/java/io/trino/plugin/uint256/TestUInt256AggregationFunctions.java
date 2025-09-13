@@ -74,17 +74,17 @@ public class TestUInt256AggregationFunctions
     {
         // 测试大数值的SUM
         assertQuery(
-                "SELECT sum(val) FROM (VALUES " +
+                "SELECT CAST(sum(val) AS VARCHAR) FROM (VALUES " +
                 "CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256), " +
                 "CAST('0' AS UINT256)) AS t(val)",
-                "SELECT CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256)");
+                "VALUES '115792089237316195423570985008687907853269984665640564039457584007913129639935'");
 
         // 测试较大数值相加
         assertQuery(
-                "SELECT sum(val) FROM (VALUES " +
+                "SELECT CAST(sum(val) AS VARCHAR) FROM (VALUES " +
                 "CAST('1000000000000000000000000000000' AS UINT256), " +
                 "CAST('2000000000000000000000000000000' AS UINT256)) AS t(val)",
-                "SELECT CAST('3000000000000000000000000000000' AS UINT256)");
+                "VALUES '3000000000000000000000000000000'");
     }
 
     @Test
@@ -92,65 +92,24 @@ public class TestUInt256AggregationFunctions
     {
         // 测试多个值的AVG
         assertQuery(
-                "SELECT avg(val) FROM (VALUES CAST('10' AS UINT256), CAST('20' AS UINT256), CAST('30' AS UINT256)) AS t(val)",
-                "SELECT CAST('20' AS UINT256)");
+                "SELECT CAST(avg(val) AS VARCHAR) FROM (VALUES CAST('10' AS UINT256), CAST('20' AS UINT256), CAST('30' AS UINT256)) AS t(val)",
+                "VALUES '20'");
 
         // 测试能被整除的平均值
         assertQuery(
-                "SELECT avg(val) FROM (VALUES CAST('100' AS UINT256), CAST('200' AS UINT256)) AS t(val)",
-                "SELECT CAST('150' AS UINT256)");
+                "SELECT CAST(avg(val) AS VARCHAR) FROM (VALUES CAST('100' AS UINT256), CAST('200' AS UINT256)) AS t(val)",
+                "VALUES '150'");
     }
 
     @Test
     public void testAvgWithNulls()
     {
         // 测试包含NULL的AVG
-        assertQuery("SELECT avg(val) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)", "SELECT CAST(NULL AS UINT256)");
+        assertQuery("SELECT CAST(avg(val) AS VARCHAR) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)", "VALUES NULL");
 
         assertQuery(
-                "SELECT avg(val) FROM (VALUES CAST('10' AS UINT256), CAST(NULL AS UINT256), CAST('30' AS UINT256)) AS t(val)",
-                "SELECT CAST('20' AS UINT256)");
-    }
-/*
-    @Test
-    public void testAvgTruncation()
-    {
-        // 测试AVG的截断行为（整数除法）
-        assertQuery(
-                "SELECT avg(val) FROM (VALUES CAST('1' AS UINT256), CAST('2' AS UINT256)) AS t(val)",
-                "SELECT CAST('1' AS UINT256)"); // 1.5 截断为 1
-
-        assertQuery(
-                "SELECT avg(val) FROM (VALUES CAST('5' AS UINT256), CAST('7' AS UINT256), CAST('9' AS UINT256)) AS t(val)",
-                "SELECT CAST('7' AS UINT256)"); // 21/3 = 7
-    }
-
-    @Test
-    public void testAvgLargeNumbers()
-    {
-        // 测试大数值的AVG
-        assertQuery(
-                "SELECT avg(val) FROM (VALUES " +
-                "CAST('1000000000000000000000000000000' AS UINT256), " +
-                "CAST('3000000000000000000000000000000' AS UINT256)) AS t(val)",
-                "SELECT CAST('2000000000000000000000000000000' AS UINT256)");
-    }
-
-    @Test
-    public void testGroupedAggregation()
-    {
-        // 测试分组聚合
-        assertQuery(
-                "SELECT grp, sum(val), avg(val) FROM (" +
-                "VALUES " +
-                "(1, CAST('10' AS UINT256)), " +
-                "(1, CAST('20' AS UINT256)), " +
-                "(2, CAST('30' AS UINT256)), " +
-                "(2, CAST('40' AS UINT256))" +
-                ") AS t(grp, val) GROUP BY grp ORDER BY grp",
-                "VALUES " +
-                "(1, CAST('30' AS UINT256), CAST('15' AS UINT256)), " +
-                "(2, CAST('70' AS UINT256), CAST('35' AS UINT256))");
+                "SELECT CAST(avg(val) AS VARCHAR) FROM (VALUES CAST('10' AS UINT256), CAST(NULL AS UINT256), CAST('30' AS UINT256)) AS t(val)",
+                "VALUES '20'");
     }
 
     @Test
@@ -158,8 +117,10 @@ public class TestUInt256AggregationFunctions
     {
         // 测试空集合的聚合
         assertQuery(
-                "SELECT sum(val), avg(val) FROM (SELECT CAST(NULL AS UINT256) AS val) AS t WHERE val IS NOT NULL",
-                "SELECT CAST(NULL AS UINT256), CAST(NULL AS UINT256)");
+                "SELECT CAST(sum(val) AS VARCHAR), CAST(avg(val) AS VARCHAR) " +
+                        "FROM (SELECT CAST(NULL as UINT256) AS val) AS t " +
+                        "WHERE val IS NOT NULL",
+                "VALUES (CAST(NULL AS VARCHAR), CAST(NULL AS VARCHAR))");
     }
 
     @Test
@@ -167,12 +128,12 @@ public class TestUInt256AggregationFunctions
     {
         // 测试与其他类型的混合使用
         assertQuery(
-                "SELECT sum(CAST(bigint_val AS UINT256)) FROM (VALUES 10, 20, 30) AS t(bigint_val)",
-                "SELECT CAST('60' AS UINT256)");
+                "SELECT CAST(sum(CAST(bigint_val AS UINT256)) AS VARCHAR) FROM (VALUES 10, 20, 30) AS t(bigint_val)",
+                "VALUES '60'");
 
         assertQuery(
-                "SELECT avg(CAST(bigint_val AS UINT256)) FROM (VALUES 10, 20, 30) AS t(bigint_val)",
-                "SELECT CAST('20' AS UINT256)");
+                "SELECT CAST(avg(CAST(bigint_val AS UINT256)) AS VARCHAR) FROM (VALUES 10, 20, 30) AS t(bigint_val)",
+                "VALUES '20'");
     }
 
     @Test
@@ -180,25 +141,26 @@ public class TestUInt256AggregationFunctions
     {
         // 测试溢出情况（应该抛出异常）
         assertQueryFails(
-                "SELECT sum(val) FROM (VALUES " +
+                "SELECT CAST(sum(val) AS VARCHAR) FROM (VALUES " +
                 "CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256), " +
                 "CAST('1' AS UINT256)) AS t(val)",
                 ".*overflow.*");
     }
-    /*
+/*
     @Test
     public void testWindowFunction()
     {
         // 测试窗口函数（如果支持的话）
         assertQuery(
-                "SELECT val, sum(val) OVER () AS total_sum, avg(val) OVER () AS total_avg FROM (" +
+                "SELECT val, CAST(sum(val) OVER () AS VARCHAR) AS total_sum, CAST(avg(val) OVER () AS VARCHAR) AS total_avg FROM (" +
                 "VALUES CAST('10' AS UINT256), CAST('20' AS UINT256), CAST('30' AS UINT256)" +
                 ") AS t(val) ORDER BY val",
                 "VALUES " +
-                "(CAST('10' AS UINT256), CAST('60' AS UINT256), CAST('20' AS UINT256)), " +
-                "(CAST('20' AS UINT256), CAST('60' AS UINT256), CAST('20' AS UINT256)), " +
-                "(CAST('30' AS UINT256), CAST('60' AS UINT256), CAST('20' AS UINT256))");
+                "('10', '60', '20'), " +
+                "('20', '60', '20'), " +
+                "('30', '60', '20')");
     }
+*/
 
     @Test
     public void testComplexQueries()
@@ -210,8 +172,7 @@ public class TestUInt256AggregationFunctions
                 "SELECT CAST('200' AS UINT256) AS val UNION ALL " +
                 "SELECT CAST('300' AS UINT256) AS val" +
                 ") " +
-                "SELECT sum(val) AS total, avg(val) AS average, count(val) AS cnt FROM data",
-                "SELECT CAST('600' AS UINT256), CAST('200' AS UINT256), 3");
+                "SELECT CAST(sum(val) AS VARCHAR) AS total, CAST(avg(val) AS VARCHAR) AS average, count(val) AS cnt FROM data",
+                "VALUES ('600', '200', 3)");
     }
- */
 }
