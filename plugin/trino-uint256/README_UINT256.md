@@ -137,27 +137,28 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
 - [c] 类型基本属性/类型签名
 - [c] Block 读写、appendTo、容量、多值
-- [x] 边界值（0、max=2^256-1）
-- [x] CAST(varbinary ↔ uint256)
-- [x] CAST(varchar ↔ uint256)（十进制）
-- [x] CAST(数字类型 → uint256)
-- [ ] CAST(uint256 -> 数字类型)（可能转换失败） 
-- [ ] CAST(Decimal -> uint256)
+- [c] 边界值（0、max=2^256-1）
+- [c] CAST(varbinary ↔ uint256)
+- [c] CAST(varchar ↔ uint256)（十进制）
+- [c] CAST(数字类型 → uint256)
+- [c] CAST(uint256 -> 数字类型)（可能转换失败） 
+- [c] CAST(Decimal -> uint256)
 - [暂停] 隐式类型转换支持查询、排序、谓词（不修改引擎无法实现） https://github.com/trinodb/trino/issues/3726
-- [x] 算术（+、-、*、/、%）含溢出/下溢/除零错误
+- [c] 算术（+、-、*、/、%）含溢出/下溢/除零错误
 - [c] 位运算（AND/OR/XOR/NOT）
 - [c] 位运算支持左移右移()
-- [x] SQL 层：DDL、插入、查询、排序、谓词
+- [c] SQL 层：DDL、插入、查询、排序、谓词
 - [x] NULL 传播（加法）
 - [x] NULL 传播覆盖更多运算（减/乘/除/位运算）
-- [x] 测试VARCHAR 解析的健壮性：
+- [c] 测试VARCHAR 解析的健壮性：
   - 前后空白裁剪（如 ' 15 '）
   - 前导'+'号（如 '+15'）
   - 前导零（如 '00015' 的等价性明确验证）
-- [x] 十进制边界值：'0' 与 2^256-1 的十进制字符串正确性验证
+- [c] 十进制边界值：'0' 与 2^256-1 的十进制字符串正确性验证
 - [c] 更丰富的比较谓词：=、<、BETWEEN、IN 等
-- [ ] 分组/聚合/去重：GROUP BY、ORDER BY 多键、DISTINCT
-- [ ] 连接键：JOIN ON UINT256 的匹配/去重
+- [c] 分组/聚合/去重：GROUP BY、ORDER BY 多键、DISTINCT
+- [c] 连接键：JOIN ON UINT256 的匹配/去重
+- [ ] bitwise相应的操作符/聚合函数，pow函数
 
 > 说明：上述“未完成”项为建议补充的测试方向，不代表产品功能缺失；现有实现已支持相应能力（除明确未实现的聚合/函数外），建议通过新增测试用例增强回归覆盖度。
 
