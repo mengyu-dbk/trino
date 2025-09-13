@@ -13,14 +13,15 @@
  */
 package io.trino.plugin.uint256.aggregation.state;
 
+import io.airlift.slice.Slice;
 import io.trino.spi.function.AccumulatorState;
 
 public interface UInt256CountAndSumState
         extends AccumulatorState
 {
-    long getSum();
+    Slice getSum();
 
-    void setSum(long sum);
+    void setSum(Slice sum);
 
     long getCount();
 

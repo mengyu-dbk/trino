@@ -27,15 +27,15 @@ import io.trino.spi.function.SqlType;
 
 import static io.trino.plugin.uint256.type.UInt256Type.UINT256;
 
-@AggregationFunction("sum")
-public final class UInt256SumAggregation
+@AggregationFunction("avg")
+public final class UInt256AvgAggregation
 {
     private static final UInt256Type type = UINT256;
 
-    private UInt256SumAggregation() {}
+    private UInt256AvgAggregation() {}
 
     @InputFunction
-    public static void sum(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
+    public static void avg(@AggregationState UInt256CountAndSumState state, @SqlType(UInt256Type.NAME) Slice value)
     {
         if (state.getSum() == null) {
             state.setSum(value);
@@ -68,7 +68,10 @@ public final class UInt256SumAggregation
             out.appendNull();
         }
         else {
-            type.writeSlice(out, state.getSum());
+            // 计算平均值：sum / count
+            Slice countAsUInt256 = UInt256Operators.castFromBigintToUint256(state.getCount());
+            Slice avgResult = UInt256Operators.divide(state.getSum(), countAsUInt256);
+            type.writeSlice(out, avgResult);
         }
     }
 }
