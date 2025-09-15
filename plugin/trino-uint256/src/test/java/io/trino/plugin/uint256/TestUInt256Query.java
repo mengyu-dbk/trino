@@ -616,6 +616,56 @@ public class TestUInt256Query
         assertThat(UInt256Operators.bitCount(halfBits)).isEqualTo(128);
     }
 
+    @Test
+    public void testBitCountWithBits()
+    {
+        // Test bit_count with bits parameter
+
+        // Test with 0 - should have 0 bits set regardless of bit range
+        Slice zero = uint256FromHex("0");
+        assertThat(UInt256Operators.bitCount(zero, 8L)).isEqualTo(0);
+        assertThat(UInt256Operators.bitCount(zero, 64L)).isEqualTo(0);
+        assertThat(UInt256Operators.bitCount(zero, 256L)).isEqualTo(0);
+
+        // Test with 0xFF - should have 8 bits set in first 8 bits
+        Slice ff = uint256FromHex("ff");
+        assertThat(UInt256Operators.bitCount(ff, 8L)).isEqualTo(8);
+        assertThat(UInt256Operators.bitCount(ff, 16L)).isEqualTo(8); // Still only 8 bits set
+        assertThat(UInt256Operators.bitCount(ff, 256L)).isEqualTo(8);
+
+        // Test with 0xFFFF - should have 16 bits set
+        Slice ffff = uint256FromHex("ffff");
+        assertThat(UInt256Operators.bitCount(ffff, 8L)).isEqualTo(8);  // Only count first 8 bits
+        assertThat(UInt256Operators.bitCount(ffff, 16L)).isEqualTo(16); // Count all 16 bits
+        assertThat(UInt256Operators.bitCount(ffff, 32L)).isEqualTo(16); // Still only 16 bits set
+
+        // Test with alternating pattern 0x5555 (01010101 01010101)
+        Slice alternating = uint256FromHex("5555");
+        assertThat(UInt256Operators.bitCount(alternating, 4L)).isEqualTo(2);  // 0101 has 2 bits
+        assertThat(UInt256Operators.bitCount(alternating, 8L)).isEqualTo(4);  // 01010101 has 4 bits
+        assertThat(UInt256Operators.bitCount(alternating, 16L)).isEqualTo(8); // Full pattern has 8 bits
+
+        // Test edge cases
+        assertThatThrownBy(() -> UInt256Operators.bitCount(zero, 0L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("bits must be positive");
+
+        assertThatThrownBy(() -> UInt256Operators.bitCount(zero, -1L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("bits must be positive");
+
+        assertThatThrownBy(() -> UInt256Operators.bitCount(zero, 257L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("bits cannot exceed 256");
+
+        // Test maximum value with different bit ranges
+        Slice max = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        assertThat(UInt256Operators.bitCount(max, 1L)).isEqualTo(1);
+        assertThat(UInt256Operators.bitCount(max, 64L)).isEqualTo(64);
+        assertThat(UInt256Operators.bitCount(max, 128L)).isEqualTo(128);
+        assertThat(UInt256Operators.bitCount(max, 256L)).isEqualTo(256);
+    }
+
     String toHex(byte[] bytes)
     {
         return new BigInteger(1, bytes).toString(16);
@@ -1041,5 +1091,136 @@ public class TestUInt256Query
         Slice shiftLeftThenRight = UInt256Operators.bitwiseRightShift(
                 UInt256Operators.bitwiseLeftShift(original, 4L), 4L);
         assertThat(toDecimal(shiftLeftThenRight)).isEqualTo(toDecimal(original));
+    }
+
+    @Test
+    public void testPowFunction()
+    {
+        // 基本的幂运算测试
+
+        // 2^3 = 8
+        Slice two = uint256FromHex("2");
+        Slice three = uint256FromHex("3");
+        Slice result = UInt256Operators.pow(two, 3);
+        assertThat(toDecimal(result)).isEqualTo("8");
+
+        // 3^4 = 81
+        result = UInt256Operators.pow(three, 4);
+        assertThat(toDecimal(result)).isEqualTo("81");
+
+        // 5^0 = 1 (任何数的0次幂都是1)
+        Slice five = uint256FromHex("5");
+        Slice zero = uint256FromHex("0");
+        result = UInt256Operators.pow(five, 0);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // 0^0 = 1 (约定)
+        result = UInt256Operators.pow(zero, 0);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // 0^5 = 0 (0的正数次幂是0)
+        result = UInt256Operators.pow(zero, 5);
+        assertThat(toDecimal(result)).isEqualTo("0");
+
+        // 1^任何数 = 1
+        Slice one = uint256FromHex("1");
+        result = UInt256Operators.pow(one, 100000);
+        assertThat(toDecimal(result)).isEqualTo("1");
+
+        // 任何数^1 = 自身
+        Slice fortyTwo = uint256FromHex("2a"); // 42
+        result = UInt256Operators.pow(fortyTwo, 1);
+        assertThat(toDecimal(result)).isEqualTo("42");
+    }
+
+    @Test
+    public void testPowWithBigint()
+    {
+        // uint256^bigint 测试
+
+        // 2^10 = 1024
+        Slice two = uint256FromHex("2");
+        Slice result = UInt256Operators.pow(two, 10L);
+        assertThat(toDecimal(result)).isEqualTo("1024");
+
+        // 3^5 = 243
+        Slice three = uint256FromHex("3");
+        result = UInt256Operators.pow(three, 5L);
+        assertThat(toDecimal(result)).isEqualTo("243");
+
+        // 10^3 = 1000
+        Slice ten = uint256FromHex("a"); // 10
+        result = UInt256Operators.pow(ten, 3L);
+        assertThat(toDecimal(result)).isEqualTo("1000");
+
+        // 任何数^0 = 1
+        result = UInt256Operators.pow(uint256FromHex("42"), 0L);
+        assertThat(toDecimal(result)).isEqualTo("1");
+    }
+
+    @Test
+    public void testPowEdgeCases()
+    {
+        // 边界情况测试
+
+        // 2^255 = 2^255 (最大可能的2的幂)
+        Slice two = uint256FromHex("2");
+        Slice result = UInt256Operators.pow(two, 255L);
+        assertThat(toDecimal(result)).isEqualTo("57896044618658097711785492504343953926634992332820282019728792003956564819968");
+
+        // 测试一些较小底数的大指数
+        // 3^64会很大但应该仍在uint256范围内
+        // 实际上3^161已经超出uint256范围了，所以我们测试一个较小的指数
+        Slice three = uint256FromHex("3");
+        result = UInt256Operators.pow(three, 80L);
+        // 3^80 = 147808829414345923316083210206383297601
+        assertThat(toDecimal(result)).isEqualTo("147808829414345923316083210206383297601");
+
+        // 测试完全平方数
+        // 16^8 = (2^4)^8 = 2^32 = 4294967296
+        Slice sixteen = uint256FromHex("10"); // 16
+        result = UInt256Operators.pow(sixteen, 8);
+        assertThat(toDecimal(result)).isEqualTo("4294967296");
+
+        // 256^4 = (2^8)^4 = 2^32 = 4294967296
+        Slice twoFiveSix = uint256FromHex("100"); // 256
+        result = UInt256Operators.pow(twoFiveSix, 4);
+        assertThat(toDecimal(result)).isEqualTo("4294967296");
+    }
+
+    @Test
+    public void testPowOverflow()
+    {
+        // 溢出测试
+
+        // 2^256应该溢出
+        Slice two = uint256FromHex("2");
+        assertThatThrownBy(() -> UInt256Operators.pow(two, 256L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("pow overflow");
+
+        // 3^162应该溢出（3^161大约是uint256的最大值）
+        Slice three = uint256FromHex("3");
+        assertThatThrownBy(() -> UInt256Operators.pow(three, 162L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("pow overflow");
+
+        // 10^78应该溢出（10^78 > 2^256）
+        Slice ten = uint256FromHex("a");
+        assertThatThrownBy(() -> UInt256Operators.pow(ten, 78L))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("pow overflow");
+
+        // (2^128)^3 应该溢出，因为 (2^128)^3 = 2^384 > 2^256
+        Slice uint128Max = uint256FromHex("100000000000000000000000000000000"); // 2^128
+        assertThatThrownBy(() -> UInt256Operators.pow(uint128Max, 3))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("pow overflow");
+
+        // 大底数的小指数也可能溢出
+        Slice largeBig = uint256FromHex("fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // 接近最大值
+        assertThatThrownBy(() -> UInt256Operators.pow(largeBig, 2))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("pow overflow");
     }
 }
