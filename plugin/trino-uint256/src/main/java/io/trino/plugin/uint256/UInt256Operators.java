@@ -770,6 +770,19 @@ public final class UInt256Operators
         return Slices.wrappedBuffer(toFixedUint256(result));
     }
 
+    // bit_count: 计算位中1的个数
+    @ScalarFunction("bit_count")
+    @SqlType(StandardTypes.BIGINT)
+    public static long bitCount(@SqlType(UInt256Type.NAME) Slice value)
+    {
+        byte[] bytes = ensureUint256(value);
+        long count = 0;
+        for (byte b : bytes) {
+            count += Integer.bitCount(b & 0xFF);
+        }
+        return count;
+    }
+
     private static byte[] ensureUint256(Slice value) // 保证是32字节，不足左侧补0
     {
         int len = value.length();
