@@ -16,6 +16,8 @@ package io.trino.plugin.uint256;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import io.trino.plugin.uint256.aggregation.UInt256AvgAggregation;
+import io.trino.plugin.uint256.aggregation.UInt256BitwiseAndAggregation;
+import io.trino.plugin.uint256.aggregation.UInt256BitwiseOrAggregation;
 import io.trino.plugin.uint256.aggregation.UInt256SumAggregation;
 import io.trino.spi.Plugin;
 import io.trino.spi.type.Type;
@@ -41,6 +43,8 @@ public final class UInt256Plugin
         return ImmutableSet.of(
                 UInt256Operators.class,
                 UInt256SumAggregation.class,
-                UInt256AvgAggregation.class);
+                UInt256AvgAggregation.class,
+                UInt256BitwiseAndAggregation.class,
+                UInt256BitwiseOrAggregation.class);
     }
 }

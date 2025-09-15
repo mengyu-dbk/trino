@@ -37,9 +37,11 @@ public final class UInt256BitwiseAndAggregation
     @InputFunction
     public static void bitwiseAndAgg(@AggregationState UInt256BitwiseState state, @SqlType(UInt256Type.NAME) Slice value)
     {
-        if (state.isEmpty()) {
+        if (value == null) {
+            return; // Skip null values
+        }
+        if (state.getValue() == null) {
             state.setValue(value);
-            state.setEmpty(false);
         }
         else {
             state.setValue(UInt256Operators.bitwiseAnd(state.getValue(), value));
@@ -49,22 +51,22 @@ public final class UInt256BitwiseAndAggregation
     @CombineFunction
     public static void combine(@AggregationState UInt256BitwiseState state, @AggregationState UInt256BitwiseState otherState)
     {
-        if (otherState.isEmpty()) {
+        Slice otherValue = otherState.getValue();
+        if (otherValue == null) {
             return;
         }
-        if (state.isEmpty()) {
-            state.setValue(otherState.getValue());
-            state.setEmpty(false);
+        if (state.getValue() == null) {
+            state.setValue(otherValue);
         }
         else {
-            state.setValue(UInt256Operators.bitwiseAnd(state.getValue(), otherState.getValue()));
+            state.setValue(UInt256Operators.bitwiseAnd(state.getValue(), otherValue));
         }
     }
 
     @OutputFunction(UInt256Type.NAME)
     public static void output(@AggregationState UInt256BitwiseState state, BlockBuilder out)
     {
-        if (state.isEmpty()) {
+        if (state.getValue() == null) {
             out.appendNull();
         }
         else {
