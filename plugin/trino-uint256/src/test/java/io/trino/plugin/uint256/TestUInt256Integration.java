@@ -568,4 +568,78 @@ public class TestUInt256Integration
                 "CAST(CAST(from_hex('00') AS UINT256) AS DECIMAL(38,0))",
                 "VALUES (0, 0, 0, 0, 0.0, 0.0, 0)");
     }
+
+    @Test
+    public void testBitCount()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_bit_count (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_bit_count VALUES " +
+                "(1, CAST(from_hex('00') AS UINT256))," + // 0 bits set
+                "(2, CAST(from_hex('01') AS UINT256))," + // 1 bit set
+                "(3, CAST(from_hex('FF') AS UINT256))," + // 8 bits set
+                "(4, CAST(from_hex('FFFF') AS UINT256))," + // 16 bits set
+                "(5, CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256))," + // 256 bits set
+                "(6, CAST(from_hex('5555') AS UINT256))," + // 8 bits set (alternating pattern)
+                "(7, NULL)", 7);
+
+        assertQueryOrdered(
+                "SELECT id, bit_count(v) FROM memory.default.uint256_bit_count WHERE v IS NOT NULL ORDER BY id",
+                "VALUES (1, 0), (2, 1), (3, 8), (4, 16), (5, 256), (6, 8)");
+
+        // Test NULL handling
+        assertQuery(
+                "SELECT bit_count(v) FROM memory.default.uint256_bit_count WHERE id = 7",
+                "VALUES NULL");
+    }
+
+    @Test
+    public void testBitwiseAggregationFunctions()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_bitwise_agg (id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_bitwise_agg VALUES " +
+                "(1, CAST(from_hex('F0') AS UINT256))," +
+                "(2, CAST(from_hex('0F') AS UINT256))," +
+                "(3, CAST(from_hex('FF') AS UINT256))," +
+                "(4, NULL)", 4);
+
+        // Test bitwise_and_agg
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(v) AS varbinary)) FROM memory.default.uint256_bitwise_agg WHERE v IS NOT NULL",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000000'"); // F0 & 0F & FF = 00
+
+        // Test bitwise_or_agg
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(v) AS varbinary)) FROM memory.default.uint256_bitwise_agg WHERE v IS NOT NULL",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'"); // F0 | 0F | FF = FF
+
+        // Test with subset that gives non-zero AND result
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(v) AS varbinary)) FROM memory.default.uint256_bitwise_agg WHERE id IN (1, 3)",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000F0'"); // F0 & FF = F0
+
+        // Test NULL handling
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(v) AS varbinary)), to_hex(CAST(bitwise_or_agg(v) AS varbinary)) FROM memory.default.uint256_bitwise_agg WHERE id = 4",
+                "VALUES (NULL, NULL)");
+    }
+
+    @Test
+    public void testBitwiseAggregationGroupBy()
+    {
+        assertUpdate("CREATE TABLE memory.default.uint256_bitwise_group (group_id INTEGER, v UINT256)");
+        assertUpdate("INSERT INTO memory.default.uint256_bitwise_group VALUES " +
+                "(1, CAST(from_hex('AA') AS UINT256))," +
+                "(1, CAST(from_hex('55') AS UINT256))," + // Group 1: AA & 55 = 00, AA | 55 = FF
+                "(2, CAST(from_hex('F0') AS UINT256))," +
+                "(2, CAST(from_hex('0F') AS UINT256))," + // Group 2: F0 & 0F = 00, F0 | 0F = FF
+                "(3, CAST(from_hex('FF') AS UINT256))", 5); // Group 3: FF & FF = FF, FF | FF = FF
+
+        assertQueryOrdered(
+                "SELECT group_id, to_hex(CAST(bitwise_and_agg(v) AS varbinary)), to_hex(CAST(bitwise_or_agg(v) AS varbinary)) " +
+                "FROM memory.default.uint256_bitwise_group GROUP BY group_id ORDER BY group_id",
+                "VALUES " +
+                "(1, '0000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000FF'), " +
+                "(2, '0000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000FF'), " +
+                "(3, '00000000000000000000000000000000000000000000000000000000000000FF', '00000000000000000000000000000000000000000000000000000000000000FF')");
+    }
 }

@@ -580,6 +580,42 @@ public class TestUInt256Query
         assertThat(notHex).isEqualTo("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00");
     }
 
+    @Test
+    public void testBitCount()
+    {
+        // Test bit_count with zero - should have 0 bits set
+        Slice zero = UInt256Operators.castFromVarbinaryToUint256(Slices.wrappedBuffer(new byte[32]));
+        assertThat(UInt256Operators.bitCount(zero)).isEqualTo(0);
+
+        // Test with single bit set - should have 1 bit set
+        Slice singleBit = uint256FromHex("1");
+        assertThat(UInt256Operators.bitCount(singleBit)).isEqualTo(1);
+
+        // Test with byte 0xFF - should have 8 bits set
+        Slice singleByte = uint256FromHex("ff");
+        assertThat(UInt256Operators.bitCount(singleByte)).isEqualTo(8);
+
+        // Test with multiple bytes - 0xF0F0 should have 8 bits set
+        Slice multipleBytes = uint256FromHex("f0f0");
+        assertThat(UInt256Operators.bitCount(multipleBytes)).isEqualTo(8);
+
+        // Test with alternating pattern - 0x5555 (0101010101010101) should have 8 bits set
+        Slice alternating = uint256FromHex("5555");
+        assertThat(UInt256Operators.bitCount(alternating)).isEqualTo(8);
+
+        // Test with all bits set in multiple bytes - 0xFFFF should have 16 bits set
+        Slice allBitsSet = uint256FromHex("ffff");
+        assertThat(UInt256Operators.bitCount(allBitsSet)).isEqualTo(16);
+
+        // Test with maximum value (all 256 bits set)
+        Slice maxValue = uint256FromHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        assertThat(UInt256Operators.bitCount(maxValue)).isEqualTo(256);
+
+        // Test with pattern that has half the bits set - alternating bytes
+        Slice halfBits = uint256FromHex("ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00");
+        assertThat(UInt256Operators.bitCount(halfBits)).isEqualTo(128);
+    }
+
     String toHex(byte[] bytes)
     {
         return new BigInteger(1, bytes).toString(16);

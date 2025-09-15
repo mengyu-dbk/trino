@@ -22,8 +22,4 @@ public interface UInt256BitwiseState
     Slice getValue();
 
     void setValue(Slice value);
-
-    boolean isEmpty();
-
-    void setEmpty(boolean empty);
 }

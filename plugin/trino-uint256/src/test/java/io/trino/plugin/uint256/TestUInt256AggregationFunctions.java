@@ -175,4 +175,116 @@ public class TestUInt256AggregationFunctions
                 "SELECT CAST(sum(val) AS VARCHAR) AS total, CAST(avg(val) AS VARCHAR) AS average, count(val) AS cnt FROM data",
                 "VALUES ('600', '200', 3)");
     }
+
+    @Test
+    public void testBitwiseAndAggBasic()
+    {
+        // Test basic bitwise_and_agg functionality
+        // 0xFF & 0x0F = 0x0F
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('FF') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000000F'");
+
+        // All bits set should return all bits set
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256), " +
+                "CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') AS UINT256)) AS t(val)",
+                "VALUES 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF'");
+
+        // AND with zero should give zero
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('FF') AS UINT256), CAST(from_hex('00') AS UINT256)) AS t(val)",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000000'");
+    }
+
+    @Test
+    public void testBitwiseOrAggBasic()
+    {
+        // Test basic bitwise_or_agg functionality
+        // 0xF0 | 0x0F = 0xFF
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('F0') AS UINT256), CAST(from_hex('0F') AS UINT256)) AS t(val)",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+
+        // OR with zero should return the other value
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('FF') AS UINT256), CAST(from_hex('00') AS UINT256)) AS t(val)",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+
+        // Multiple values OR test
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('01') AS UINT256), CAST(from_hex('02') AS UINT256), CAST(from_hex('04') AS UINT256)) AS t(val)",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000007'");
+    }
+
+    @Test
+    public void testBitwiseAggWithNulls()
+    {
+        // Test bitwise_and_agg with NULLs
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)",
+                "VALUES NULL");
+
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('FF') AS UINT256), CAST(NULL AS UINT256), CAST(from_hex('0F') AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000000F'");
+
+        // Test bitwise_or_agg with NULLs
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM (VALUES CAST(NULL AS UINT256)) AS t(val)",
+                "VALUES NULL");
+
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('F0') AS UINT256), CAST(NULL AS UINT256), CAST(from_hex('0F') AS UINT256)) AS t(val)",
+                "VALUES '00000000000000000000000000000000000000000000000000000000000000FF'");
+    }
+
+    @Test
+    public void testBitwiseAggSingleValue()
+    {
+        // Test bitwise aggregations with single value
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('ABCD') AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000ABCD'");
+
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('1234') AS UINT256)) AS t(val)",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000001234'");
+    }
+
+    @Test
+    public void testBitwiseAggEmptySet()
+    {
+        // Test bitwise aggregations with empty set
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)), to_hex(CAST(bitwise_or_agg(val) AS varbinary)) " +
+                "FROM (SELECT CAST(NULL as UINT256) AS val) AS t " +
+                "WHERE val IS NOT NULL",
+                "VALUES (NULL, NULL)");
+    }
+
+    @Test
+    public void testBitwiseAggComplexPatterns()
+    {
+        // Test with alternating bit patterns
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_and_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('AAAA') AS UINT256), CAST(from_hex('5555') AS UINT256)) AS t(val)",
+                "VALUES '0000000000000000000000000000000000000000000000000000000000000000'");
+
+        assertQuery(
+                "SELECT to_hex(CAST(bitwise_or_agg(val) AS varbinary)) FROM " +
+                "(VALUES CAST(from_hex('AAAA') AS UINT256), CAST(from_hex('5555') AS UINT256)) AS t(val)",
+                "VALUES '000000000000000000000000000000000000000000000000000000000000FFFF'");
+    }
 }
