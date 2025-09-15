@@ -783,6 +783,122 @@ public final class UInt256Operators
         return count;
     }
 
+    // bit_count: 计算指定位数范围内1的个数
+    @ScalarFunction("bit_count")
+    @SqlType(StandardTypes.BIGINT)
+    public static long bitCount(@SqlType(UInt256Type.NAME) Slice value, @SqlType(StandardTypes.BIGINT) long bits)
+    {
+        if (bits <= 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, "bits must be positive");
+        }
+        if (bits > 256) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT, "bits cannot exceed 256 for UINT256");
+        }
+
+        byte[] bytes = ensureUint256(value);
+        BigInteger bigValue = new BigInteger(1, bytes);
+
+        // 创建一个掩码来限制位数
+        BigInteger mask;
+        if (bits >= 256) {
+            // 如果bits >= 256，就使用完整的值
+            mask = BigInteger.ONE.shiftLeft(256).subtract(BigInteger.ONE);
+        }
+        else {
+            mask = BigInteger.ONE.shiftLeft((int) bits).subtract(BigInteger.ONE);
+        }
+
+        // 应用掩码
+        BigInteger maskedValue = bigValue.and(mask);
+
+        // 计算1的个数
+        return maskedValue.bitCount();
+    }
+
+    // pow: uint256^bigint -> uint256
+    @ScalarFunction("pow")
+    @SqlType(UInt256Type.NAME)
+    public static Slice pow(@SqlType(UInt256Type.NAME) Slice base, @SqlType(StandardTypes.BIGINT) long exponent)
+    {
+        if (exponent < 0) {
+            throw new TrinoException(INVALID_CAST_ARGUMENT,
+                format("Cannot raise UINT256 to negative power: %s", exponent));
+        }
+
+        BigInteger baseBig = getBigInteger(base);
+        BigInteger expBig = BigInteger.valueOf(exponent);
+
+        // 特殊情况处理
+        if (exponent == 0) {
+            return Slices.wrappedBuffer(toFixedUint256(BigInteger.ONE));
+        }
+
+        if (baseBig.equals(BigInteger.ZERO)) {
+            return Slices.wrappedBuffer(new byte[UINT256_BYTES]);
+        }
+
+        if (baseBig.equals(BigInteger.ONE)) {
+            return Slices.wrappedBuffer(toFixedUint256(BigInteger.ONE));
+        }
+
+        // 使用快速幂算法计算
+        BigInteger result = powMod(baseBig, expBig, null);
+
+        // 检查结果是否超出uint256范围
+        if (result.bitLength() > 256) {
+            throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                format("pow overflow: result exceeds uint256 maximum value"));
+        }
+
+        return Slices.wrappedBuffer(toFixedUint256(result));
+    }
+
+    /**
+     * 快速幂算法实现，支持模运算优化
+     * 如果modulus为null，则进行普通的幂运算
+     */
+    private static BigInteger powMod(BigInteger base, BigInteger exponent, BigInteger modulus)
+    {
+        if (exponent.equals(BigInteger.ZERO)) {
+            return BigInteger.ONE;
+        }
+
+        BigInteger result = BigInteger.ONE;
+        BigInteger currentBase = base;
+        BigInteger exp = exponent;
+
+        // 使用二进制幂运算算法
+        while (exp.compareTo(BigInteger.ZERO) > 0) {
+            // 如果指数是奇数，将当前底数乘到结果中
+            if (exp.testBit(0)) {
+                result = result.multiply(currentBase);
+                if (modulus != null) {
+                    result = result.mod(modulus);
+                }
+                // 早期溢出检查，避免计算过大的中间结果
+                else if (result.bitLength() > 256) {
+                    throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                        "pow overflow: intermediate result exceeds uint256 maximum value");
+                }
+            }
+
+            // 将底数平方，指数除以2
+            currentBase = currentBase.multiply(currentBase);
+            if (modulus != null) {
+                currentBase = currentBase.mod(modulus);
+            }
+            // 早期溢出检查
+            else if (currentBase.bitLength() > 256 && exp.compareTo(BigInteger.ONE) > 0) {
+                throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
+                    "pow overflow: intermediate result exceeds uint256 maximum value");
+            }
+
+            exp = exp.shiftRight(1); // exp /= 2
+        }
+
+        return result;
+    }
+
     private static byte[] ensureUint256(Slice value) // 保证是32字节，不足左侧补0
     {
         int len = value.length();
