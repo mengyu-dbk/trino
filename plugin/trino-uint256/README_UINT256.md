@@ -148,8 +148,8 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 - [c] 位运算（AND/OR/XOR/NOT）
 - [c] 位运算支持左移右移()
 - [c] SQL 层：DDL、插入、查询、排序、谓词
-- [x] NULL 传播（加法）
-- [x] NULL 传播覆盖更多运算（减/乘/除/位运算）
+- [c] NULL 传播（加法）
+- [c] NULL 传播覆盖更多运算（减/乘/除/位运算）
 - [c] 测试VARCHAR 解析的健壮性：
   - 前后空白裁剪（如 ' 15 '）
   - 前导'+'号（如 '+15'）
@@ -158,7 +158,7 @@ SELECT to_hex(CAST(CAST(from_hex('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 - [c] 更丰富的比较谓词：=、<、BETWEEN、IN 等
 - [c] 分组/聚合/去重：GROUP BY、ORDER BY 多键、DISTINCT
 - [c] 连接键：JOIN ON UINT256 的匹配/去重
-- [ ] bitwise相应的操作符/聚合函数，pow函数
+- [c] bitwise相应的操作符/聚合函数，pow函数
 
 > 说明：上述“未完成”项为建议补充的测试方向，不代表产品功能缺失；现有实现已支持相应能力（除明确未实现的聚合/函数外），建议通过新增测试用例增强回归覆盖度。
 
