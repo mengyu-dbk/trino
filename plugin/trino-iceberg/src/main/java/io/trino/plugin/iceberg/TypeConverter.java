@@ -14,6 +14,7 @@
 package io.trino.plugin.iceberg;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.BigintType;
@@ -67,6 +68,10 @@ public final class TypeConverter
                 return BooleanType.BOOLEAN;
             case BINARY:
             case FIXED:
+                // Check if this is a 32-byte fixed type (UINT256)
+                if (type instanceof Types.FixedType fixedType && fixedType.length() == 32) {
+                    return UInt256Type.UINT256;
+                }
                 return VarbinaryType.VARBINARY;
             case DATE:
                 return DateType.DATE;
@@ -166,6 +171,9 @@ public final class TypeConverter
         }
         if (type.equals(UUID)) {
             return Types.UUIDType.get();
+        }
+        if (type instanceof UInt256Type) {
+            return Types.FixedType.ofLength(32);
         }
         if (type instanceof RowType rowType) {
             return fromRow(rowType, columnIdentity, nextFieldId);
