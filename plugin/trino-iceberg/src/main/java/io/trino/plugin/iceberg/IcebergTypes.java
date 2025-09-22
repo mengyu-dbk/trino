@@ -16,6 +16,7 @@ package io.trino.plugin.iceberg;
 import com.google.common.math.LongMath;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Decimals;
 import io.trino.spi.type.Int128;
@@ -126,6 +127,10 @@ public final class IcebergTypes
             return trinoUuidToJavaUuid(((Slice) trinoNativeValue));
         }
 
+        if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+            return ByteBuffer.wrap(((Slice) trinoNativeValue).getBytes());
+        }
+
         throw new UnsupportedOperationException("Unsupported type: " + type);
     }
 
@@ -187,6 +192,9 @@ public final class IcebergTypes
         }
         if (icebergType instanceof Types.UUIDType) {
             return javaUuidToTrinoUuid((UUID) value);
+        }
+        if (icebergType instanceof Types.FixedType fixedType && fixedType.length() == 32) {
+            return Slices.wrappedBuffer(getWrappedBytes((ByteBuffer) value).clone());
         }
 
         throw new UnsupportedOperationException("Unsupported iceberg type: " + icebergType);
