@@ -34,6 +34,7 @@ import io.trino.plugin.iceberg.catalog.IcebergTableOperationsProvider;
 import io.trino.plugin.iceberg.catalog.TrinoCatalog;
 import io.trino.plugin.iceberg.util.DefaultLocationProvider;
 import io.trino.plugin.iceberg.util.ObjectStoreLocationProvider;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
@@ -917,6 +918,17 @@ public final class IcebergUtil
 
         if (tableMetadata.getComment().isPresent()) {
             propertiesBuilder.put(TABLE_COMMENT, tableMetadata.getComment().get());
+        }
+
+        // Add UINT256 type marking
+        List<String> uint256Columns = tableMetadata.getColumns().stream()
+                .filter(column -> column.getType().getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature()))
+                .map(ColumnMetadata::getName)
+                .collect(toImmutableList());
+
+        if (!uint256Columns.isEmpty()) {
+            propertiesBuilder.put("trino.uint256.enabled", "true");
+            propertiesBuilder.put("trino.uint256.columns", String.join(",", uint256Columns));
         }
 
         Map<String, String> baseProperties = propertiesBuilder.buildOrThrow();
