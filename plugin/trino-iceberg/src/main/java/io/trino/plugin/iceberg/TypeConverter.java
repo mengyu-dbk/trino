@@ -14,6 +14,7 @@
 package io.trino.plugin.iceberg;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
 import io.trino.spi.type.ArrayType;
@@ -42,6 +43,7 @@ import org.apache.iceberg.types.Types;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -63,13 +65,24 @@ public final class TypeConverter
 
     public static Type toTrinoType(org.apache.iceberg.types.Type type, TypeManager typeManager)
     {
+        return toTrinoType(type, typeManager, ImmutableMap.of());
+    }
+
+    public static Type toTrinoType(org.apache.iceberg.types.Type type, TypeManager typeManager, Map<String, String> tableProperties)
+    {
         switch (type.typeId()) {
             case BOOLEAN:
                 return BooleanType.BOOLEAN;
             case BINARY:
             case FIXED:
-                // Check if this is a 32-byte fixed type (UINT256)
+                // Check if this is a 32-byte fixed type
                 if (type instanceof Types.FixedType fixedType && fixedType.length() == 32) {
+                    // Check if table properties indicate this is a UINT256 type
+                    boolean isUint256Enabled = "true".equals(tableProperties.get("trino.uint256.enabled"));
+                    if (isUint256Enabled) {
+                        return UInt256Type.UINT256;
+                    }
+                    // Default to UINT256 for 32-byte fixed types (safe assumption for Trino-created tables)
                     return UInt256Type.UINT256;
                 }
                 return VarbinaryType.VARBINARY;
@@ -172,7 +185,7 @@ public final class TypeConverter
         if (type.equals(UUID)) {
             return Types.UUIDType.get();
         }
-        if (type instanceof UInt256Type) {
+        if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
             return Types.FixedType.ofLength(32);
         }
         if (type instanceof RowType rowType) {
