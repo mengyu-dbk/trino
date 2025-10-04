@@ -76,15 +76,18 @@ class TestRedirectWithMultipleCatalogs
     {
         // UNION across different catalog types
         assertQuerySucceeds("""
-                SELECT custkey as id, orderstatus as status
-                FROM virtual.virtual_sales.daily_orders
-                WHERE orderstatus = 'F'
-                LIMIT 10
-                UNION ALL
-                SELECT user_id as id, segment as status
-                FROM virtual.virtual_data.user_profiles
-                WHERE segment = 'BUILDING'
-                LIMIT 10
+                SELECT * FROM (
+                    SELECT custkey as id, orderstatus as status
+                    FROM virtual.virtual_sales.daily_orders
+                    WHERE orderstatus = 'F'
+                    LIMIT 10
+                ) UNION ALL
+                SELECT * FROM (
+                    SELECT user_id as id, segment as status
+                    FROM virtual.virtual_data.user_profiles
+                    WHERE segment = 'BUILDING'
+                    LIMIT 10
+                )
                 """);
     }
 
