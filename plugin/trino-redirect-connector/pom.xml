@@ -24,6 +24,12 @@
             <artifactId>guava</artifactId>
         </dependency>
 
+        <!-- Runtime dependencies -->
+        <dependency>
+            <groupId>io.airlift</groupId>
+            <artifactId>log</artifactId>
+        </dependency>
+
         <!-- Provided dependencies - available from Trino SPI -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
@@ -58,13 +64,6 @@
         <dependency>
             <groupId>com.google.errorprone</groupId>
             <artifactId>error_prone_annotations</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
-        <!-- Runtime dependencies -->
-        <dependency>
-            <groupId>io.airlift</groupId>
-            <artifactId>log</artifactId>
             <scope>runtime</scope>
         </dependency>
 

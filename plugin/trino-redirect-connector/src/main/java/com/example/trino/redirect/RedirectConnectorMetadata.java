@@ -15,6 +15,7 @@ package com.example.trino.redirect;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.airlift.log.Logger;
 import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.connector.ConnectorSession;
@@ -41,6 +42,8 @@ import java.util.Set;
 public class RedirectConnectorMetadata
         implements ConnectorMetadata
 {
+    private static final Logger log = Logger.get(RedirectConnectorMetadata.class);
+
     /**
      * Set of virtual schema names that this connector manages.
      * ONLY tables in these schemas will be redirected.
@@ -62,14 +65,14 @@ public class RedirectConnectorMetadata
      * Format: "schema.table" -> CatalogSchemaTableName
      */
     private static final Map<String, CatalogSchemaTableName> TABLE_REDIRECTS = ImmutableMap.<String, CatalogSchemaTableName>builder()
-            // Virtual sales schema mappings
-            .put("virtual_sales.daily_orders", new CatalogSchemaTableName("hive", "production", "fact_orders_daily"))
-            .put("virtual_sales.monthly_revenue", new CatalogSchemaTableName("hive", "production", "fact_revenue_monthly"))
-            .put("virtual_sales.customer_segments", new CatalogSchemaTableName("iceberg", "analytics", "dim_customer_segments"))
-            // Virtual data schema mappings
-            .put("virtual_data.user_profiles", new CatalogSchemaTableName("iceberg", "analytics", "dim_users"))
-            .put("virtual_data.activity_logs", new CatalogSchemaTableName("hive", "raw_data", "fact_user_activity"))
-            .put("virtual_data.product_catalog", new CatalogSchemaTableName("postgresql", "public", "products"))
+            // Virtual sales schema mappings - redirect to memory connector for testing
+            .put("virtual_sales.daily_orders", new CatalogSchemaTableName("memory", "default", "orders"))
+            .put("virtual_sales.monthly_revenue", new CatalogSchemaTableName("memory", "default", "revenue"))
+            .put("virtual_sales.customer_segments", new CatalogSchemaTableName("memory", "default", "customers"))
+            // Virtual data schema mappings - redirect to memory connector for testing
+            .put("virtual_data.user_profiles", new CatalogSchemaTableName("memory", "default", "users"))
+            .put("virtual_data.activity_logs", new CatalogSchemaTableName("memory", "default", "logs"))
+            .put("virtual_data.product_catalog", new CatalogSchemaTableName("memory", "default", "products"))
             .buildOrThrow();
 
     /**
@@ -117,9 +120,12 @@ public class RedirectConnectorMetadata
         String schemaName = tableName.getSchemaName();
         String tableNameStr = tableName.getTableName();
 
+        log.info("=== REDIRECT PLUGIN: Checking table: %s.%s", schemaName, tableNameStr);
+
         // CRITICAL: Only redirect tables in our virtual schemas
         // This prevents infinite loops and unwanted redirection
         if (!VIRTUAL_SCHEMAS.contains(schemaName)) {
+            log.info("=== REDIRECT PLUGIN: Schema '%s' is not a virtual schema, no redirection", schemaName);
             return Optional.empty();
         }
 
@@ -130,6 +136,17 @@ public class RedirectConnectorMetadata
         // In a real implementation, this would be something like:
         // CatalogSchemaTableName physicalTable = rpcClient.resolveTable(schemaName, tableNameStr);
         CatalogSchemaTableName physicalTable = TABLE_REDIRECTS.get(lookupKey);
+
+        if (physicalTable != null) {
+            log.info("=== REDIRECT PLUGIN: ✓ Redirecting %s.%s -> %s.%s.%s",
+                    schemaName, tableNameStr,
+                    physicalTable.getCatalogName(),
+                    physicalTable.getSchemaTableName().getSchemaName(),
+                    physicalTable.getSchemaTableName().getTableName());
+        }
+        else {
+            log.info("=== REDIRECT PLUGIN: ✗ No mapping found for %s.%s", schemaName, tableNameStr);
+        }
 
         // Return the physical table if found, otherwise empty
         // Empty means: "this table doesn't exist in this virtual schema"
