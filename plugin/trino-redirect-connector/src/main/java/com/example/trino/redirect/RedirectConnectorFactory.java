@@ -13,6 +13,9 @@
  */
 package com.example.trino.redirect;
 
+import com.google.inject.Injector;
+import io.airlift.bootstrap.Bootstrap;
+import io.airlift.json.JsonModule;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorContext;
 import io.trino.spi.connector.ConnectorFactory;
@@ -22,12 +25,22 @@ import java.util.Map;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Factory for creating instances of the Redirect Connector.
+ * Factory for creating instances of the Redirect Connector using Guice dependency injection.
  *
  * This factory is responsible for:
  * 1. Registering the connector with a unique name ("redirect")
- * 2. Creating new connector instances when a catalog using this connector is configured
- * 3. Passing configuration properties to the connector
+ * 2. Initializing the Guice injector with all dependencies
+ * 3. Creating new connector instances with injected dependencies
+ * 4. Passing configuration properties to the connector
+ *
+ * The factory uses Airlift Bootstrap to:
+ * - Load configuration from catalog properties files
+ * - Initialize all components via Guice dependency injection
+ * - Ensure proper lifecycle management
+ *
+ * Inspired by:
+ * - trino-example-http/ExampleConnectorFactory
+ * - trino-opa/OpaAccessControlFactory
  */
 public class RedirectConnectorFactory
         implements ConnectorFactory
@@ -50,12 +63,18 @@ public class RedirectConnectorFactory
     }
 
     /**
-     * Creates a new instance of the Redirect Connector.
+     * Creates a new instance of the Redirect Connector using Guice dependency injection.
+     *
+     * This method:
+     * 1. Initializes Airlift Bootstrap with JsonModule and RedirectModule
+     * 2. Sets configuration properties from the catalog properties file
+     * 3. Creates a Guice injector
+     * 4. Retrieves the fully-injected RedirectConnector instance
      *
      * @param catalogName The name of the catalog being created (e.g., "virtual")
      * @param config Configuration properties from the catalog properties file
      * @param context The connector context provided by Trino
-     * @return A new RedirectConnector instance
+     * @return A new RedirectConnector instance with all dependencies injected
      */
     @Override
     public Connector create(String catalogName, Map<String, String> config, ConnectorContext context)
@@ -64,9 +83,18 @@ public class RedirectConnectorFactory
         requireNonNull(config, "config is null");
         requireNonNull(context, "context is null");
 
-        // For this simple implementation, we don't use any configuration properties
-        // In a real implementation, you might read RPC endpoint URLs, schema mappings, etc.
+        // Create Airlift Bootstrap with necessary modules
+        Bootstrap app = new Bootstrap(
+                new JsonModule(),      // JSON serialization support
+                new RedirectModule()); // Redirect connector bindings
 
-        return new RedirectConnector(catalogName);
+        // Initialize the injector with configuration
+        Injector injector = app
+                .doNotInitializeLogging()  // Trino handles logging
+                .setRequiredConfigurationProperties(config)  // Load config from properties file
+                .initialize();
+
+        // Get the fully-injected connector instance from Guice
+        return injector.getInstance(RedirectConnector.class);
     }
 }

@@ -13,6 +13,7 @@
  */
 package com.example.trino.redirect;
 
+import com.google.inject.Inject;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.connector.ConnectorSession;
@@ -22,31 +23,37 @@ import io.trino.spi.transaction.IsolationLevel;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Main connector implementation for the Redirect Connector.
+ * Main connector implementation for the Redirect Connector with Guice dependency injection.
  *
  * This connector is a metadata-only connector that doesn't handle data directly.
- * Instead, it redirects table references to physical tables in other catalogs.
+ * Instead, it redirects table references to physical tables in other catalogs using
+ * gRPC-based table mapping service.
  *
  * Key responsibilities:
  * - Provide connector metadata through RedirectConnectorMetadata
  * - Handle transaction lifecycle (begin/commit/rollback)
  * - Manage connector lifecycle (shutdown)
+ * - Clean up resources (RPC connections, caches) on shutdown
  */
 public class RedirectConnector
         implements Connector
 {
-    private final String catalogName;
     private final RedirectConnectorMetadata metadata;
+    private final TableMappingService tableMappingService;
 
     /**
-     * Creates a new RedirectConnector instance.
+     * Creates a new RedirectConnector instance with Guice-injected dependencies.
      *
-     * @param catalogName The name of the catalog using this connector
+     * @param metadata The connector metadata implementation
+     * @param tableMappingService The table mapping service for resource cleanup
      */
-    public RedirectConnector(String catalogName)
+    @Inject
+    public RedirectConnector(
+            RedirectConnectorMetadata metadata,
+            TableMappingService tableMappingService)
     {
-        this.catalogName = requireNonNull(catalogName, "catalogName is null");
-        this.metadata = new RedirectConnectorMetadata();
+        this.metadata = requireNonNull(metadata, "metadata is null");
+        this.tableMappingService = requireNonNull(tableMappingService, "tableMappingService is null");
     }
 
     /**
@@ -110,13 +117,16 @@ public class RedirectConnector
     /**
      * Performs cleanup when the connector is shut down.
      *
-     * Override this method if you need to release resources (e.g., RPC connections,
-     * thread pools, etc.)
+     * This method releases resources including:
+     * - gRPC channels
+     * - Cache resources
+     * - Connection pools
      */
     @Override
     public void shutdown()
     {
-        // No resources to release in this simple implementation
+        // Shutdown the table mapping service to release gRPC connections and caches
+        tableMappingService.shutdown();
     }
 
     /**

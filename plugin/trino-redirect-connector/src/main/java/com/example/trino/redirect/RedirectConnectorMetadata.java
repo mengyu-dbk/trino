@@ -14,7 +14,7 @@
 package com.example.trino.redirect;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.trino.spi.connector.CatalogSchemaTableName;
 import io.trino.spi.connector.ConnectorMetadata;
@@ -23,21 +23,27 @@ import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.security.TrinoPrincipal;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static java.util.Objects.requireNonNull;
+
 /**
- * Metadata implementation for the Redirect Connector.
+ * Metadata implementation for the Redirect Connector with gRPC-based table mapping.
  *
- * This is the core of the plugin that implements table redirection logic.
- * It defines virtual schemas and redirects queries to physical tables in other catalogs.
+ * This is the core of the plugin that implements table redirection logic using:
+ * - TableNameDecider: Decides physical table location based on RPC metadata
+ * - TableMappingService: gRPC client for fetching table metadata (with caching)
  *
  * Key features:
  * - Defines virtual schemas (virtual_sales, virtual_data)
- * - Implements redirectTable() to map virtual tables to physical tables
- * - Simulates RPC calls with hardcoded mappings
+ * - Implements redirectTable() to map virtual tables to physical tables via RPC
  * - Prevents infinite redirection loops by only redirecting within virtual schemas
+ *
+ * Inspired by chaintable-offline's architecture:
+ * - Uses gRPC for table metadata lookup
+ * - Caches results for performance
+ * - Determines physical location based on table type
  */
 public class RedirectConnectorMetadata
         implements ConnectorMetadata
@@ -53,27 +59,19 @@ public class RedirectConnectorMetadata
             "virtual_sales",
             "virtual_data");
 
+    private final TableNameDecider tableNameDecider;
+
     /**
-     * Simulated RPC mapping from virtual tables to physical tables.
+     * Creates RedirectConnectorMetadata with Guice-injected dependencies.
      *
-     * In a real implementation, this would be replaced by:
-     * - An RPC client calling a remote service
-     * - A database lookup
-     * - A configuration file
-     * - A REST API call
-     *
-     * Format: "schema.table" -> CatalogSchemaTableName
+     * @param tableNameDecider The table name decider that uses RPC service to determine physical tables
      */
-    private static final Map<String, CatalogSchemaTableName> TABLE_REDIRECTS = ImmutableMap.<String, CatalogSchemaTableName>builder()
-            // Virtual sales schema mappings - redirect to memory connector for testing
-            .put("virtual_sales.daily_orders", new CatalogSchemaTableName("memory", "default", "orders"))
-            .put("virtual_sales.monthly_revenue", new CatalogSchemaTableName("memory", "default", "revenue"))
-            .put("virtual_sales.customer_segments", new CatalogSchemaTableName("memory", "default", "customers"))
-            // Virtual data schema mappings - redirect to memory connector for testing
-            .put("virtual_data.user_profiles", new CatalogSchemaTableName("memory", "default", "users"))
-            .put("virtual_data.activity_logs", new CatalogSchemaTableName("memory", "default", "logs"))
-            .put("virtual_data.product_catalog", new CatalogSchemaTableName("memory", "default", "products"))
-            .buildOrThrow();
+    @Inject
+    public RedirectConnectorMetadata(TableNameDecider tableNameDecider)
+    {
+        this.tableNameDecider = requireNonNull(tableNameDecider, "tableNameDecider is null");
+        log.info("RedirectConnectorMetadata initialized with virtual schemas: %s", VIRTUAL_SCHEMAS);
+    }
 
     /**
      * Lists all schemas in this catalog.
@@ -91,7 +89,7 @@ public class RedirectConnectorMetadata
     }
 
     /**
-     * Core redirection logic: maps virtual tables to physical tables.
+     * Core redirection logic: maps virtual tables to physical tables using gRPC-based lookup.
      *
      * This method is called by Trino's query planner when resolving table references.
      * When a query references a table (e.g., SELECT * FROM virtual.virtual_sales.daily_orders),
@@ -102,12 +100,11 @@ public class RedirectConnectorMetadata
      *    - If NOT, return Optional.empty() immediately (no redirection)
      *    - This prevents infinite loops and scopes redirection to our virtual schemas only
      *
-     * 2. Construct the lookup key (schema.table)
+     * 2. Call TableNameDecider to determine physical table location
+     *    - TableNameDecider uses TableMappingService (gRPC + cache)
+     *    - Determines location based on table type (OFFCHAIN, ONCHAIN_STATE, ONCHAIN_ITEM)
      *
-     * 3. Perform the "RPC call" (simulated with a Map lookup)
-     *    - In production, this would be: rpcClient.getPhysicalTable(schema, table)
-     *
-     * 4. If a mapping exists, return the physical table location
+     * 3. If a mapping exists, return the physical table location
      *    - Otherwise, return Optional.empty() (table doesn't exist in this virtual schema)
      *
      * @param session The connector session
@@ -129,20 +126,17 @@ public class RedirectConnectorMetadata
             return Optional.empty();
         }
 
-        // Construct the lookup key for the simulated RPC call
-        String lookupKey = schemaName + "." + tableNameStr;
+        // Use TableNameDecider to determine physical table location via RPC
+        // This replaces the hardcoded TABLE_REDIRECTS map
+        Optional<CatalogSchemaTableName> physicalTable = tableNameDecider.decideTableMapping(tableName);
 
-        // Simulate RPC call to get physical table location
-        // In a real implementation, this would be something like:
-        // CatalogSchemaTableName physicalTable = rpcClient.resolveTable(schemaName, tableNameStr);
-        CatalogSchemaTableName physicalTable = TABLE_REDIRECTS.get(lookupKey);
-
-        if (physicalTable != null) {
+        if (physicalTable.isPresent()) {
+            CatalogSchemaTableName physical = physicalTable.get();
             log.info("=== REDIRECT PLUGIN: ✓ Redirecting %s.%s -> %s.%s.%s",
                     schemaName, tableNameStr,
-                    physicalTable.getCatalogName(),
-                    physicalTable.getSchemaTableName().getSchemaName(),
-                    physicalTable.getSchemaTableName().getTableName());
+                    physical.getCatalogName(),
+                    physical.getSchemaTableName().getSchemaName(),
+                    physical.getSchemaTableName().getTableName());
         }
         else {
             log.info("=== REDIRECT PLUGIN: ✗ No mapping found for %s.%s", schemaName, tableNameStr);
@@ -150,7 +144,7 @@ public class RedirectConnectorMetadata
 
         // Return the physical table if found, otherwise empty
         // Empty means: "this table doesn't exist in this virtual schema"
-        return Optional.ofNullable(physicalTable);
+        return physicalTable;
     }
 
     /**
