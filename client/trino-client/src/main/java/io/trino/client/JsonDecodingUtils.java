@@ -138,6 +138,7 @@ public final class JsonDecodingUtils
             case GEOMETRY:
             case SPHERICAL_GEOGRAPHY:
             case COLOR:
+            case "UINT256":
                 return STRING_DECODER;
             case KDB_TREE:
             case BING_TILE:
