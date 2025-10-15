@@ -14,7 +14,6 @@
 package io.trino.plugin.iceberg;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import io.trino.plugin.uint256.type.UInt256Type;
@@ -25,7 +24,6 @@ import org.apache.iceberg.types.Types;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
@@ -55,9 +53,10 @@ public class TestUInt256IcebergTypeConversion
     @Test
     public void testIcebergFixedTypeToUInt256()
     {
-        // Test conversion from Iceberg FixedType(32) to UInt256Type
+        // Test conversion from Iceberg FixedType(32) to UInt256Type when doc marker is present
         Types.FixedType icebergFixedType = Types.FixedType.ofLength(32);
-        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER);
+        String columnDoc = "trino:type=uint256";
+        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER, columnDoc);
 
         assertThat(trinoType).isEqualTo(UInt256Type.UINT256);
     }
@@ -107,27 +106,25 @@ public class TestUInt256IcebergTypeConversion
     }
 
     @Test
-    public void testUInt256TypeIdentificationWithTableProperties()
+    public void testUInt256TypeIdentificationWithDocMarker()
     {
-        // Test that FixedType(32) is correctly identified as UINT256 when table properties indicate so
+        // Test that FixedType(32) is correctly identified as UINT256 when doc field contains marker
         Types.FixedType icebergFixedType = Types.FixedType.ofLength(32);
-        Map<String, String> tableProperties = ImmutableMap.of(
-                "trino.uint256.enabled", "true",
-                "trino.uint256.columns", "test_column");
+        String columnDoc = "trino:type=uint256\nThis is a UINT256 column";
 
-        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER, tableProperties);
+        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER, columnDoc);
         assertThat(trinoType).isEqualTo(UInt256Type.UINT256);
     }
 
     @Test
-    public void testUInt256TypeIdentificationWithoutTableProperties()
+    public void testUInt256TypeIdentificationWithoutDocMarker()
     {
-        // Test that FixedType(32) defaults to UINT256 even without explicit table properties
+        // Test that FixedType(32) is identified as VARBINARY without the marker
         Types.FixedType icebergFixedType = Types.FixedType.ofLength(32);
-        Map<String, String> emptyProperties = ImmutableMap.of();
+        String columnDoc = "Regular column without marker";
 
-        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER, emptyProperties);
-        assertThat(trinoType).isEqualTo(UInt256Type.UINT256);
+        io.trino.spi.type.Type trinoType = toTrinoType(icebergFixedType, TYPE_MANAGER, columnDoc);
+        assertThat(trinoType).isEqualTo(VarbinaryType.VARBINARY);
     }
 
     @Test

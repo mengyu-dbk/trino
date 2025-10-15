@@ -960,8 +960,10 @@ public class IcebergPageSourceProvider
                         String parquetFieldName = requireNonNull(parquetIdToFieldName.get(baseColumn.getId())).getName();
 
                         // The top level columns are already mapped by name/id appropriately.
+                        // Convert UINT256 to VARBINARY for Parquet reader (same as write path)
+                        Type parquetCompatibleType = TypeConverter.toParquetCompatibleType(baseColumn.getType());
                         Optional<Field> field = IcebergParquetColumnIOConverter.constructField(
-                                new FieldContext(baseColumn.getType(), baseColumn.getColumnIdentity()),
+                                new FieldContext(parquetCompatibleType, baseColumn.getColumnIdentity()),
                                 messageColumnIO.getChild(parquetFieldName));
                         if (field.isEmpty()) {
                             // base column is missing so return a null

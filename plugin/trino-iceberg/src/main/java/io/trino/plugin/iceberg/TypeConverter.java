@@ -14,7 +14,6 @@
 package io.trino.plugin.iceberg;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.TrinoException;
 import io.trino.spi.type.ArrayType;
@@ -43,7 +42,6 @@ import org.apache.iceberg.types.Types;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -65,25 +63,27 @@ public final class TypeConverter
 
     public static Type toTrinoType(org.apache.iceberg.types.Type type, TypeManager typeManager)
     {
-        return toTrinoType(type, typeManager, ImmutableMap.of());
+        return toTrinoType(type, typeManager, null);
     }
 
-    public static Type toTrinoType(org.apache.iceberg.types.Type type, TypeManager typeManager, Map<String, String> tableProperties)
+    /**
+     * Convert Iceberg type to Trino type, with optional column metadata for type disambiguation.
+     *
+     * @param columnDoc Optional doc field from NestedField for checking type markers (e.g., UINT256)
+     */
+    public static Type toTrinoType(org.apache.iceberg.types.Type type, TypeManager typeManager, String columnDoc)
     {
         switch (type.typeId()) {
             case BOOLEAN:
                 return BooleanType.BOOLEAN;
             case BINARY:
             case FIXED:
-                // Check if this is a 32-byte fixed type
+                // Check if this is a 32-byte fixed type that should be UINT256
                 if (type instanceof Types.FixedType fixedType && fixedType.length() == 32) {
-                    // Check if table properties indicate this is a UINT256 type
-                    boolean isUint256Enabled = "true".equals(tableProperties.get("trino.uint256.enabled"));
-                    if (isUint256Enabled) {
+                    // Check if column doc contains UINT256 type marker
+                    if (columnDoc != null && columnDoc.contains("trino:type=uint256")) {
                         return UInt256Type.UINT256;
                     }
-                    // Default to UINT256 for 32-byte fixed types (safe assumption for Trino-created tables)
-                    return UInt256Type.UINT256;
                 }
                 return VarbinaryType.VARBINARY;
             case DATE:
@@ -272,5 +272,22 @@ public final class TypeConverter
             return;
         }
         throw new IllegalArgumentException("Either a column identity or nextFieldId is expected");
+    }
+
+    /**
+     * Convert Trino types to Parquet-compatible types.
+     * Specifically, converts UINT256 to VARBINARY so the general Parquet library
+     * doesn't need to know about plugin-specific types.
+     * <p>
+     * UINT256 data is already stored as 32-byte binary, and Parquet will write it as
+     * FIXED_LEN_BYTE_ARRAY(32) based on the Iceberg schema. The type marker in Iceberg
+     * metadata ensures it's read back as UINT256.
+     */
+    public static Type toParquetCompatibleType(Type type)
+    {
+        if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+            return VarbinaryType.VARBINARY;
+        }
+        return type;
     }
 }

@@ -203,6 +203,7 @@ public final class IcebergUtil
     public static final String TRINO_TABLE_COMMENT_CACHE_PREVENTED = "trino_table_comment_cache_prevented";
     public static final String COLUMN_TRINO_NOT_NULL_PROPERTY = "trino_not_null";
     public static final String COLUMN_TRINO_TYPE_ID_PROPERTY = "trino_type_id";
+    public static final String COLUMN_UINT256_TYPE_MARKER = "trino:type=uint256";
 
     public static final String METADATA_FOLDER_NAME = "metadata";
     public static final String METADATA_FILE_EXTENSION = ".metadata.json";
@@ -407,7 +408,7 @@ public final class IcebergUtil
                 .map(column ->
                         ColumnMetadata.builder()
                                 .setName(column.name())
-                                .setType(toTrinoType(column.type(), typeManager))
+                                .setType(toTrinoType(column.type(), typeManager, column.doc()))
                                 .setNullable(column.isOptional())
                                 .setComment(Optional.ofNullable(column.doc()))
                                 .build())
@@ -439,9 +440,9 @@ public final class IcebergUtil
     {
         return new IcebergColumnHandle(
                 createColumnIdentity(baseColumn),
-                toTrinoType(baseColumn.type(), typeManager),
+                toTrinoType(baseColumn.type(), typeManager, baseColumn.doc()),
                 path,
-                toTrinoType(childColumn.type(), typeManager),
+                toTrinoType(childColumn.type(), typeManager, childColumn.doc()),
                 childColumn.isOptional(),
                 Optional.ofNullable(childColumn.doc()));
     }
@@ -822,12 +823,19 @@ public final class IcebergUtil
             if (!column.isHidden()) {
                 int index = icebergColumns.size() + 1;
                 org.apache.iceberg.types.Type type = toIcebergTypeForNewColumn(column.getType(), nextFieldId);
+
+                // Add UINT256 type marker to doc field for UINT256 columns
+                String doc = column.getComment();
+                if (column.getType().getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+                    doc = doc != null ? COLUMN_UINT256_TYPE_MARKER + "\n" + doc : COLUMN_UINT256_TYPE_MARKER;
+                }
+
                 NestedField field = NestedField.builder()
                         .withId(index)
                         .isOptional(column.isNullable())
                         .withName(column.getName())
                         .ofType(type)
-                        .withDoc(column.getComment())
+                        .withDoc(doc)
                         .build();
                 icebergColumns.add(field);
             }
@@ -918,17 +926,6 @@ public final class IcebergUtil
 
         if (tableMetadata.getComment().isPresent()) {
             propertiesBuilder.put(TABLE_COMMENT, tableMetadata.getComment().get());
-        }
-
-        // Add UINT256 type marking
-        List<String> uint256Columns = tableMetadata.getColumns().stream()
-                .filter(column -> column.getType().getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature()))
-                .map(ColumnMetadata::getName)
-                .collect(toImmutableList());
-
-        if (!uint256Columns.isEmpty()) {
-            propertiesBuilder.put("trino.uint256.enabled", "true");
-            propertiesBuilder.put("trino.uint256.columns", String.join(",", uint256Columns));
         }
 
         Map<String, String> baseProperties = propertiesBuilder.buildOrThrow();

@@ -162,7 +162,8 @@ public class IcebergFileWriterFactory
                 .map(Types.NestedField::name)
                 .collect(toImmutableList());
         List<Type> fileColumnTypes = icebergSchema.columns().stream()
-                .map(column -> toTrinoType(column.type(), typeManager))
+                .map(column -> toTrinoType(column.type(), typeManager, column.doc()))
+                .map(TypeConverter::toParquetCompatibleType)  // Convert UINT256 to VARBINARY for Parquet
                 .collect(toImmutableList());
 
         try {
@@ -217,8 +218,7 @@ public class IcebergFileWriterFactory
                     .map(Types.NestedField::name)
                     .collect(toImmutableList());
             List<Type> fileColumnTypes = columnFields.stream()
-                    .map(Types.NestedField::type)
-                    .map(type -> toTrinoType(type, typeManager))
+                    .map(field -> toTrinoType(field.type(), typeManager, field.doc()))
                     .collect(toImmutableList());
 
             Optional<Supplier<OrcDataSource>> validationInputFactory = Optional.empty();
@@ -292,7 +292,7 @@ public class IcebergFileWriterFactory
         Closeable rollbackAction = () -> fileSystem.deleteFile(outputPath);
 
         List<Type> columnTypes = icebergSchema.columns().stream()
-                .map(column -> toTrinoType(column.type(), typeManager))
+                .map(column -> toTrinoType(column.type(), typeManager, column.doc()))
                 .collect(toImmutableList());
 
         return new IcebergAvroFileWriter(
