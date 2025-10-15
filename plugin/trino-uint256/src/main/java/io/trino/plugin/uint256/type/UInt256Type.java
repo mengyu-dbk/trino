@@ -22,6 +22,7 @@ import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.type.AbstractVariableWidthType;
+import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperatorDeclaration;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.TypeSignature;
@@ -123,5 +124,23 @@ public class UInt256Type
             throw new IllegalArgumentException("UINT256 length should be 32 bytes");
         }
         ((VariableWidthBlockBuilder) blockBuilder).writeEntry(value, offset, length);
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        return this.getTypeSignature().equals(((Type) o).getTypeSignature());
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return getTypeSignature().hashCode();
     }
 }
