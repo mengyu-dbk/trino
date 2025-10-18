@@ -90,8 +90,13 @@ public class UInt256Type
     @Override
     public VariableWidthBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries, int expectedBytesPerEntry)
     {
+        // expectedBytesPerEntry == 0 means "unspecified/variable size", which is valid for nullable columns
+        // In this case, use the actual UINT256_BYTE_LENGTH for optimization
+        if (expectedBytesPerEntry == 0) {
+            return super.createBlockBuilder(blockBuilderStatus, expectedEntries, UINT256_BYTE_LENGTH);
+        }
         if (expectedBytesPerEntry != UINT256_BYTE_LENGTH) {
-            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes");
+            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes, got: " + expectedBytesPerEntry);
         }
         return super.createBlockBuilder(blockBuilderStatus, expectedEntries, expectedBytesPerEntry);
     }

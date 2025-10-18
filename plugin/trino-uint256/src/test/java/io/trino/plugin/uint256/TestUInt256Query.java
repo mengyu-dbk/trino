@@ -1223,4 +1223,51 @@ public class TestUInt256Query
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("pow overflow");
     }
+
+    @Test
+    public void testBlockBuilderWithZeroExpectedBytesPerEntry()
+    {
+        // This test simulates the scenario when Iceberg adds a new nullable column to an existing table
+        // In this case, createBlockBuilder might be called with expectedBytesPerEntry=0
+        BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 10, 0);
+
+        // Verify we can write values even when created with expectedBytesPerEntry=0
+        byte[] testData = new byte[32];
+        testData[0] = 42;
+        Slice testSlice = Slices.wrappedBuffer(testData);
+
+        // Write a non-null value
+        uint256Type.writeSlice(blockBuilder, testSlice);
+
+        // Write a null value
+        blockBuilder.appendNull();
+
+        // Write another non-null value
+        testData[0] = 99;
+        Slice testSlice2 = Slices.wrappedBuffer(testData);
+        uint256Type.writeSlice(blockBuilder, testSlice2);
+
+        Block block = blockBuilder.build();
+
+        // Verify the block has correct values
+        assertThat(block.getPositionCount()).isEqualTo(3);
+        assertThat(block.isNull(0)).isFalse();
+        assertThat(uint256Type.getSlice(block, 0).getByte(0)).isEqualTo((byte) 42);
+        assertThat(block.isNull(1)).isTrue();
+        assertThat(block.isNull(2)).isFalse();
+        assertThat(uint256Type.getSlice(block, 2).getByte(0)).isEqualTo((byte) 99);
+    }
+
+    @Test
+    public void testBlockBuilderWithInvalidExpectedBytesPerEntry()
+    {
+        // Test that non-zero, non-32 values are rejected
+        assertThatThrownBy(() -> uint256Type.createBlockBuilder(null, 10, 16))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 block entry length should be 32 bytes");
+
+        assertThatThrownBy(() -> uint256Type.createBlockBuilder(null, 10, 64))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 block entry length should be 32 bytes");
+    }
 }
