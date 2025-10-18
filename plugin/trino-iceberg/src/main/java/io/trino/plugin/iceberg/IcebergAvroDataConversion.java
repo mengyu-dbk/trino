@@ -289,6 +289,7 @@ public final class IcebergAvroDataConversion
         if (type instanceof VarbinaryType) {
             if (icebergType.typeId().equals(FIXED)) {
                 VARBINARY.writeSlice(builder, Slices.wrappedBuffer((byte[]) object));
+                return;  // Must return here to avoid falling through to ByteBuffer cast
             }
             VARBINARY.writeSlice(builder, Slices.wrappedHeapBuffer((ByteBuffer) object));
             return;

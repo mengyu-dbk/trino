@@ -20,7 +20,9 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.BlockBuilderStatus;
 import io.trino.spi.block.VariableWidthBlock;
 import io.trino.spi.block.VariableWidthBlockBuilder;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.type.AbstractVariableWidthType;
+import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperatorDeclaration;
 import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.TypeSignature;
@@ -68,7 +70,7 @@ public class UInt256Type
     }
 
     @Override
-    public Object getObjectValue(Block block, int position)
+    public Object getObjectValue(ConnectorSession session, Block block, int position)
     {
         if (block.isNull(position)) {
             return null;
@@ -88,8 +90,13 @@ public class UInt256Type
     @Override
     public VariableWidthBlockBuilder createBlockBuilder(BlockBuilderStatus blockBuilderStatus, int expectedEntries, int expectedBytesPerEntry)
     {
+        // expectedBytesPerEntry == 0 means "unspecified/variable size", which is valid for nullable columns
+        // In this case, use the actual UINT256_BYTE_LENGTH for optimization
+        if (expectedBytesPerEntry == 0) {
+            return super.createBlockBuilder(blockBuilderStatus, expectedEntries, UINT256_BYTE_LENGTH);
+        }
         if (expectedBytesPerEntry != UINT256_BYTE_LENGTH) {
-            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes");
+            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes, got: " + expectedBytesPerEntry);
         }
         return super.createBlockBuilder(blockBuilderStatus, expectedEntries, expectedBytesPerEntry);
     }
@@ -122,5 +129,23 @@ public class UInt256Type
             throw new IllegalArgumentException("UINT256 length should be 32 bytes");
         }
         ((VariableWidthBlockBuilder) blockBuilder).writeEntry(value, offset, length);
+    }
+
+    @Override
+    public boolean equals(Object o)
+    {
+        if (this == o) {
+            return true;
+        }
+        if (o == null) {
+            return false;
+        }
+        return this.getTypeSignature().equals(((Type) o).getTypeSignature());
+    }
+
+    @Override
+    public int hashCode()
+    {
+        return getTypeSignature().hashCode();
     }
 }

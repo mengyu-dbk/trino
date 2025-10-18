@@ -72,6 +72,7 @@ import io.trino.plugin.iceberg.system.PropertiesTable;
 import io.trino.plugin.iceberg.system.RefsTable;
 import io.trino.plugin.iceberg.system.SnapshotsTable;
 import io.trino.plugin.iceberg.util.DataFileWithDeleteFiles;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.ErrorCode;
 import io.trino.spi.RefreshType;
 import io.trino.spi.TrinoException;
@@ -320,6 +321,7 @@ import static io.trino.plugin.iceberg.IcebergTableProperties.SORTED_BY_PROPERTY;
 import static io.trino.plugin.iceberg.IcebergTableProperties.getPartitioning;
 import static io.trino.plugin.iceberg.IcebergTableProperties.getTableLocation;
 import static io.trino.plugin.iceberg.IcebergTableProperties.validateCompression;
+import static io.trino.plugin.iceberg.IcebergUtil.COLUMN_UINT256_TYPE_MARKER;
 import static io.trino.plugin.iceberg.IcebergUtil.buildPath;
 import static io.trino.plugin.iceberg.IcebergUtil.canEnforceColumnConstraintInSpecs;
 import static io.trino.plugin.iceberg.IcebergUtil.checkFormatForProperty;
@@ -2638,7 +2640,14 @@ public class IcebergMetadata
         AtomicInteger nextFieldId = new AtomicInteger(icebergTable.schema().highestFieldId() + 2);
         try {
             UpdateSchema updateSchema = icebergTable.updateSchema();
-            updateSchema.addColumn(null, column.getName(), toIcebergTypeForNewColumn(column.getType(), nextFieldId), column.getComment());
+
+            // Add UINT256 type marker to doc field for UINT256 columns
+            String doc = column.getComment();
+            if (column.getType().getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+                doc = doc != null ? COLUMN_UINT256_TYPE_MARKER + "\n" + doc : COLUMN_UINT256_TYPE_MARKER;
+            }
+
+            updateSchema.addColumn(null, column.getName(), toIcebergTypeForNewColumn(column.getType(), nextFieldId), doc);
             switch (position) {
                 case ColumnPosition.First _ -> updateSchema.moveFirst(column.getName());
                 case ColumnPosition.After after -> updateSchema.moveAfter(column.getName(), after.columnName());
@@ -2681,9 +2690,15 @@ public class IcebergMetadata
         }
 
         try {
-            icebergTable.updateSchema()
-                    .addColumn(caseSensitiveParentName, fieldName, toIcebergTypeForNewColumn(type, new AtomicInteger())) // Iceberg library assigns fresh id internally
-                    .commit();
+            // Add UINT256 type marker to doc field for UINT256 fields
+            String doc = null;
+            if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+                doc = COLUMN_UINT256_TYPE_MARKER;
+            }
+
+            UpdateSchema updateSchema = icebergTable.updateSchema();
+            updateSchema.addColumn(caseSensitiveParentName, fieldName, toIcebergTypeForNewColumn(type, new AtomicInteger()), doc); // Iceberg library assigns fresh id internally
+            updateSchema.commit();
         }
         catch (RuntimeException e) {
             throw new TrinoException(ICEBERG_COMMIT_ERROR, "Failed to add field: " + firstNonNull(e.getMessage(), e), e);

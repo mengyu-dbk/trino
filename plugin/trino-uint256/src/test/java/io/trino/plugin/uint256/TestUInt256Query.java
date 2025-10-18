@@ -103,11 +103,11 @@ public class TestUInt256Query
                 .isInstanceOf(IllegalArgumentException.class);
 
         // 验证Object值
-        Object objectValue = uint256Type.getObjectValue(block, 0);
+        Object objectValue = uint256Type.getObjectValue(null, block, 0);
         assertThat(objectValue).isNotNull();
         assertThat(objectValue).isEqualTo("1780731860627700044960722568376592200742329637303199754547598369979440671");
 
-        Object objectValue2 = uint256Type.getObjectValue(block, 1);
+        Object objectValue2 = uint256Type.getObjectValue(null, block, 1);
         assertThat(objectValue2).isNotNull();
         assertThat(objectValue2).isEqualTo("44780752741604000149004052581396903457332494212052990074388535163930135043615");
 
@@ -126,7 +126,7 @@ public class TestUInt256Query
         Block block = blockBuilder.build();
         assertThat(block.isNull(0)).isTrue();
 
-        Object objectValue = uint256Type.getObjectValue(block, 0);
+        Object objectValue = uint256Type.getObjectValue(null, block, 0);
         assertThat(objectValue).isNull();
     }
 
@@ -1222,5 +1222,52 @@ public class TestUInt256Query
         assertThatThrownBy(() -> UInt256Operators.pow(largeBig, 2))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("pow overflow");
+    }
+
+    @Test
+    public void testBlockBuilderWithZeroExpectedBytesPerEntry()
+    {
+        // This test simulates the scenario when Iceberg adds a new nullable column to an existing table
+        // In this case, createBlockBuilder might be called with expectedBytesPerEntry=0
+        BlockBuilder blockBuilder = uint256Type.createBlockBuilder(null, 10, 0);
+
+        // Verify we can write values even when created with expectedBytesPerEntry=0
+        byte[] testData = new byte[32];
+        testData[0] = 42;
+        Slice testSlice = Slices.wrappedBuffer(testData);
+
+        // Write a non-null value
+        uint256Type.writeSlice(blockBuilder, testSlice);
+
+        // Write a null value
+        blockBuilder.appendNull();
+
+        // Write another non-null value
+        testData[0] = 99;
+        Slice testSlice2 = Slices.wrappedBuffer(testData);
+        uint256Type.writeSlice(blockBuilder, testSlice2);
+
+        Block block = blockBuilder.build();
+
+        // Verify the block has correct values
+        assertThat(block.getPositionCount()).isEqualTo(3);
+        assertThat(block.isNull(0)).isFalse();
+        assertThat(uint256Type.getSlice(block, 0).getByte(0)).isEqualTo((byte) 42);
+        assertThat(block.isNull(1)).isTrue();
+        assertThat(block.isNull(2)).isFalse();
+        assertThat(uint256Type.getSlice(block, 2).getByte(0)).isEqualTo((byte) 99);
+    }
+
+    @Test
+    public void testBlockBuilderWithInvalidExpectedBytesPerEntry()
+    {
+        // Test that non-zero, non-32 values are rejected
+        assertThatThrownBy(() -> uint256Type.createBlockBuilder(null, 10, 16))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 block entry length should be 32 bytes");
+
+        assertThatThrownBy(() -> uint256Type.createBlockBuilder(null, 10, 64))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("UINT256 block entry length should be 32 bytes");
     }
 }
