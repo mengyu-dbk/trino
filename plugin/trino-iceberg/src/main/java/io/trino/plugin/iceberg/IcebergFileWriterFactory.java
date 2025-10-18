@@ -219,6 +219,7 @@ public class IcebergFileWriterFactory
                     .collect(toImmutableList());
             List<Type> fileColumnTypes = columnFields.stream()
                     .map(field -> toTrinoType(field.type(), typeManager, field.doc()))
+                    .map(TypeConverter::toParquetCompatibleType)  // Convert UINT256 to VARBINARY for ORC (reuse Parquet conversion)
                     .collect(toImmutableList());
 
             Optional<Supplier<OrcDataSource>> validationInputFactory = Optional.empty();
@@ -293,6 +294,7 @@ public class IcebergFileWriterFactory
 
         List<Type> columnTypes = icebergSchema.columns().stream()
                 .map(column -> toTrinoType(column.type(), typeManager, column.doc()))
+                .map(TypeConverter::toParquetCompatibleType)  // Convert UINT256 to VARBINARY for Avro (reuse Parquet conversion)
                 .collect(toImmutableList());
 
         return new IcebergAvroFileWriter(
