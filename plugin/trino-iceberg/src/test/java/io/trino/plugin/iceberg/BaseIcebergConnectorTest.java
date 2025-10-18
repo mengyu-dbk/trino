@@ -1076,10 +1076,10 @@ public abstract class BaseIcebergConnectorTest
                 "\\QUnable to parse partitioning value: Cannot partition by non-primitive source field: struct<3: child: optional string>");
         assertQueryFails(
                 "CREATE TABLE test_partitioned_table_nested_field_inside_array (parent ARRAY(ROW(child VARCHAR))) WITH (partitioning = ARRAY['\"parent.child\"'])",
-                "\\QPartitioning field [parent.element.child] cannot be contained in a array");
+                "\\QUnable to parse partitioning value: Invalid partition field parent: list<struct<3: child: optional string>>");
         assertQueryFails(
                 "CREATE TABLE test_partitioned_table_nested_field_inside_map (parent MAP(ROW(child INTEGER), ARRAY(VARCHAR))) WITH (partitioning = ARRAY['\"parent.key.child\"'])",
-                "\\QPartitioning field [parent.key.child] cannot be contained in a map");
+                "\\QUnable to parse partitioning value: Invalid partition field parent: map<struct<4: child: optional int>, list<string>>");
         assertQueryFails(
                 "CREATE TABLE test_partitioned_table_nested_field_year_transform_in_string (parent ROW(child VARCHAR)) WITH (partitioning = ARRAY['year(\"parent.child\")'])",
                 "\\QUnable to parse partitioning value: Invalid source type string for transform: year");
@@ -1631,7 +1631,7 @@ public abstract class BaseIcebergConnectorTest
                 "WITH (sorted_by = ARRAY['comment']) AS SELECT * FROM nation WITH NO DATA")) {
             assertUpdate(withSmallRowGroups, "INSERT INTO " + table.getName() + " SELECT * FROM nation", 25);
             assertThat(query("ALTER TABLE " + table.getName() + " DROP COLUMN comment"))
-                    .failure().hasMessageContaining("Cannot find source column for sort field");
+                    .failure().hasMessageContaining("Cannot drop sort field: comment");
         }
     }
 
@@ -6645,7 +6645,10 @@ public abstract class BaseIcebergConnectorTest
         List<String> initialDataFiles = getAllDataFilesFromTableDirectory(tableName);
         assertThat(initialDataFiles).contains(orphanFile);
 
-        assertQuerySucceeds(sessionWithShortRetentionUnlocked, "ALTER TABLE " + tableName + " EXECUTE REMOVE_ORPHAN_FILES (retention_threshold => '0s')");
+        assertUpdate(
+                sessionWithShortRetentionUnlocked,
+                "ALTER TABLE " + tableName + " EXECUTE REMOVE_ORPHAN_FILES (retention_threshold => '0s')",
+                "VALUES ('processed_manifests_count', 3), ('active_files_count', 16), ('scanned_files_count', 17), ('deleted_files_count', 1)");
         assertQuery("SELECT * FROM " + tableName, "VALUES ('one', 1), ('three', 3)");
 
         List<String> updatedDataFiles = getAllDataFilesFromTableDirectory(tableName);
@@ -9449,7 +9452,7 @@ public abstract class BaseIcebergConnectorTest
     private void assertQueryIdAndUserStored(String tableName, QueryId queryId)
     {
         assertThat(getFieldFromLatestSnapshotSummary(tableName, TRINO_QUERY_ID_NAME))
-                .isEqualTo(queryId.toString());
+                .isEqualTo(queryId.id());
         assertThat(getFieldFromLatestSnapshotSummary(tableName, TRINO_USER_NAME))
                 .isEqualTo("user");
     }
