@@ -1,0 +1,6 @@
+-- delimiter: |; ignoreOrder: false; ignoreExcessRows: false; trimValues: true
+100|10|2
+100|20|1
+200|10|1
+200|20|1
+300|10|1

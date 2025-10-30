@@ -1,0 +1,5 @@
+-- delimiter: |; ignoreOrder: false; ignoreExcessRows: false; trimValues: true
+2|200|400|2|40000
+3|300|600|0|90000
+4|400|800|1|160000
+5|500|1000|2|250000

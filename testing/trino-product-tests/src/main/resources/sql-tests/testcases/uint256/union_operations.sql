@@ -1,0 +1,25 @@
+-- database: trino; groups: uint256;
+CREATE SCHEMA IF NOT EXISTS iceberg.default;
+
+CREATE TABLE iceberg.default.uint256_union_test1 AS
+SELECT * FROM (VALUES
+    CAST('1' AS UINT256),
+    CAST('50' AS UINT256),
+    CAST('100' AS UINT256),
+    CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256)
+) t(x);
+
+CREATE TABLE iceberg.default.uint256_union_test2 AS
+SELECT * FROM (VALUES
+    CAST('1' AS UINT256),
+    CAST('100' AS UINT256),
+    CAST('500' AS UINT256),
+    CAST('1000' AS UINT256)
+) t(x);
+
+SELECT x
+FROM iceberg.default.uint256_union_test1
+UNION
+SELECT x
+FROM iceberg.default.uint256_union_test2
+ORDER BY x;
