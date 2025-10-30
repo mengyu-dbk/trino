@@ -1,0 +1,7 @@
+-- delimiter: |; ignoreOrder: false; ignoreExcessRows: false; trimValues: true
+1|first
+2|second
+3|third
+4|fourth
+5|fifth
+100000000000000000000000000000000000000|large

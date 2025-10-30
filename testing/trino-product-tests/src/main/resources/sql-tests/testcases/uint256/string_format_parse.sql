@@ -1,0 +1,36 @@
+-- database: trino; groups: uint256;
+CREATE SCHEMA IF NOT EXISTS iceberg.default;
+
+CREATE TABLE iceberg.default.uint256_string_test AS
+SELECT * FROM (VALUES
+    CAST('0' AS UINT256),
+    CAST('1' AS UINT256),
+    CAST('100' AS UINT256),
+    CAST('99999999999999999999999999999999999999' AS UINT256),
+    CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256)
+) t(x);
+
+SELECT
+  -- Test parsing from string with various formats
+  CAST('0' AS UINT256) AS zero_from_string,
+  CAST('1' AS UINT256) AS one_from_string,
+  CAST(' 1 ' AS UINT256) AS one_from_string_with_spaces,
+  CAST('0001' AS UINT256) AS one_from_string_with_leading_zeros,
+
+  -- Test maximum value parsing
+  CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256) AS max_value_from_string,
+
+  -- Test formatting to string
+  CAST(CAST('0' AS UINT256) AS VARCHAR) AS zero_to_string,
+  CAST(CAST('1' AS UINT256) AS VARCHAR) AS one_to_string,
+  CAST(CAST('100' AS UINT256) AS VARCHAR) AS hundred_to_string,
+  CAST(CAST('99999999999999999999999999999999999999' AS UINT256) AS VARCHAR) AS large_number_to_string,
+  CAST(CAST('115792089237316195423570985008687907853269984665640564039457584007913129639935' AS UINT256) AS VARCHAR) AS max_value_to_string,
+
+  -- Test error handling with TRY
+  TRY(CAST('-1' AS UINT256)) AS negative_number,
+  TRY(CAST('115792089237316195423570985008687907853269984665640564039457584007913129639936' AS UINT256)) AS overflow_number,
+  TRY(CAST('invalid' AS UINT256)) AS invalid_string,
+  TRY(CAST('' AS UINT256)) AS empty_string
+FROM iceberg.default.uint256_string_test
+LIMIT 1;

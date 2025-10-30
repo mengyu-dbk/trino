@@ -1,0 +1,2 @@
+-- delimiter: |; ignoreOrder: true; ignoreExcessRows: false; trimValues: true
+Query is not deterministically orderable
