@@ -96,7 +96,8 @@ public class UInt256Type
             return super.createBlockBuilder(blockBuilderStatus, expectedEntries, UINT256_BYTE_LENGTH);
         }
         if (expectedBytesPerEntry != UINT256_BYTE_LENGTH) {
-            throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes, got: " + expectedBytesPerEntry);
+            // throw new IllegalArgumentException("UINT256 block entry length should be 32 bytes, got: " + expectedBytesPerEntry);
+            return super.createBlockBuilder(blockBuilderStatus, expectedEntries, UINT256_BYTE_LENGTH);
         }
         return super.createBlockBuilder(blockBuilderStatus, expectedEntries, expectedBytesPerEntry);
     }
@@ -117,7 +118,7 @@ public class UInt256Type
     public void writeSlice(BlockBuilder blockBuilder, Slice value)
     {
         if (value.length() != UINT256_BYTE_LENGTH) {
-            throw new IllegalArgumentException("UINT256 length should be 32 bytes");
+            throw new IllegalArgumentException("UINT256 length should be 32 bytes, received: " + value.length() + " " + value);
         }
         writeSlice(blockBuilder, value, 0, value.length());
     }

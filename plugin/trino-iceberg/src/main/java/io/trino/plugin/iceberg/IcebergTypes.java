@@ -194,7 +194,20 @@ public final class IcebergTypes
             return javaUuidToTrinoUuid((UUID) value);
         }
         if (icebergType instanceof Types.FixedType fixedType && fixedType.length() == 32) {
-            return Slices.wrappedBuffer(getWrappedBytes((ByteBuffer) value).clone());
+            byte[] bytes = getWrappedBytes((ByteBuffer) value).clone();
+            if (bytes.length != 32) {
+                if (bytes.length < 32) {
+                    byte[] padded = new byte[32];
+                    System.arraycopy(bytes, 0, padded, 32 - bytes.length, bytes.length);
+                    return Slices.wrappedBuffer(padded);
+                }
+                else {
+                    byte[] truncated = new byte[32];
+                    System.arraycopy(bytes, 0, truncated, 0, 32);
+                    return Slices.wrappedBuffer(truncated);
+                }
+            }
+            return Slices.wrappedBuffer(bytes);
         }
 
         throw new UnsupportedOperationException("Unsupported iceberg type: " + icebergType);
