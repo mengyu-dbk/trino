@@ -15,6 +15,7 @@ package io.trino.plugin.iceberg;
 
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slices;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.ArrayBlockBuilder;
@@ -172,6 +173,9 @@ public final class IcebergAvroDataConversion
                 return varbinaryType.getSlice(block, position).getBytes();
             }
             return ByteBuffer.wrap(varbinaryType.getSlice(block, position).getBytes());
+        }
+        if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+            return UInt256Type.UINT256.getSlice(block, position).getBytes();
         }
         if (type.equals(DATE)) {
             int epochDays = DATE.getInt(block, position);

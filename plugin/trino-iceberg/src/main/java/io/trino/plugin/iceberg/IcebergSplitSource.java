@@ -34,6 +34,7 @@ import io.trino.plugin.base.metrics.DurationTiming;
 import io.trino.plugin.base.metrics.LongCount;
 import io.trino.plugin.iceberg.delete.DeleteFile;
 import io.trino.plugin.iceberg.util.DataFileWithDeleteFiles;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.SplitWeight;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorSession;
@@ -599,6 +600,12 @@ public class IcebergSplitSource
             else {
                 Long nullValueCount = nullValueCounts.get(fieldId);
                 mayContainNulls = nullValueCount == null || nullValueCount > 0;
+            }
+            if (column.getBaseType().getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+                domainBuilder.put(
+                        column,
+                        Domain.all(UInt256Type.UINT256));
+                continue;
             }
             Type type = fieldIdToType.get(fieldId);
             domainBuilder.put(

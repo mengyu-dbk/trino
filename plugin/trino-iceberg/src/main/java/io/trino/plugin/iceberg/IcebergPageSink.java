@@ -22,6 +22,7 @@ import io.airlift.units.DataSize;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.plugin.iceberg.PartitionTransforms.ColumnTransform;
+import io.trino.plugin.uint256.type.UInt256Type;
 import io.trino.spi.Page;
 import io.trino.spi.PageIndexer;
 import io.trino.spi.PageIndexerFactory;
@@ -520,6 +521,9 @@ public class IcebergPageSink
         }
         if (type instanceof VarcharType varcharType) {
             return varcharType.getSlice(block, position).toStringUtf8();
+        }
+        if (type.getTypeSignature().equals(UInt256Type.UINT256.getTypeSignature())) {
+            return UInt256Type.UINT256.getSlice(block, position).toByteBuffer();
         }
         if (type.equals(UUID)) {
             return trinoUuidToJavaUuid(UUID.getSlice(block, position));
