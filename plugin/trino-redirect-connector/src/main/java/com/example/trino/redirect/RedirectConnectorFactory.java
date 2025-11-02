@@ -64,9 +64,15 @@ public class RedirectConnectorFactory
         requireNonNull(config, "config is null");
         requireNonNull(context, "context is null");
 
-        // For this simple implementation, we don't use any configuration properties
-        // In a real implementation, you might read RPC endpoint URLs, schema mappings, etc.
+        // Read MetaService endpoint from configuration
+        String metaServiceEndpoint = config.get("metaservice.endpoint");
 
-        return new RedirectConnector(catalogName);
+        // Create MetaServiceClient if endpoint is configured
+        MetaServiceClient metaServiceClient = null;
+        if (metaServiceEndpoint != null && !metaServiceEndpoint.isEmpty()) {
+            metaServiceClient = new MetaServiceClient(metaServiceEndpoint);
+        }
+
+        return new RedirectConnector(catalogName, metaServiceClient);
     }
 }

@@ -42,11 +42,12 @@ public class RedirectConnector
      * Creates a new RedirectConnector instance.
      *
      * @param catalogName The name of the catalog using this connector
+     * @param metaServiceClient Optional MetaService client for metadata lookups
      */
-    public RedirectConnector(String catalogName)
+    public RedirectConnector(String catalogName, MetaServiceClient metaServiceClient)
     {
         this.catalogName = requireNonNull(catalogName, "catalogName is null");
-        this.metadata = new RedirectConnectorMetadata();
+        this.metadata = new RedirectConnectorMetadata(metaServiceClient);
     }
 
     /**

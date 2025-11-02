@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class TestRedirectConnectorMetadata
 {
-    private final RedirectConnectorMetadata metadata = new RedirectConnectorMetadata();
+    private final RedirectConnectorMetadata metadata = new RedirectConnectorMetadata(null);
 
     @Test
     void testListSchemaNames()

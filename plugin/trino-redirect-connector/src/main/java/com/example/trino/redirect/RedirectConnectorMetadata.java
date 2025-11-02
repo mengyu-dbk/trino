@@ -13,6 +13,8 @@
  */
 package com.example.trino.redirect;
 
+import com.example.trino.redirect.models.TableInfo;
+import com.example.trino.redirect.models.TableMetadata;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
@@ -44,6 +46,8 @@ public class RedirectConnectorMetadata
 {
     private static final Logger log = Logger.get(RedirectConnectorMetadata.class);
 
+    private final MetaServiceClient metaServiceClient;
+
     /**
      * Set of virtual schema names that this connector manages.
      * ONLY tables in these schemas will be redirected.
@@ -53,16 +57,14 @@ public class RedirectConnectorMetadata
             "virtual_sales",
             "virtual_data");
 
+    public RedirectConnectorMetadata(MetaServiceClient metaServiceClient)
+    {
+        this.metaServiceClient = metaServiceClient;
+    }
+
     /**
      * Simulated RPC mapping from virtual tables to physical tables.
-     *
-     * In a real implementation, this would be replaced by:
-     * - An RPC client calling a remote service
-     * - A database lookup
-     * - A configuration file
-     * - A REST API call
-     *
-     * Format: "schema.table" -> CatalogSchemaTableName
+     * This is used as a fallback when MetaServiceClient is not configured.
      */
     private static final Map<String, CatalogSchemaTableName> TABLE_REDIRECTS = ImmutableMap.<String, CatalogSchemaTableName>builder()
             // Virtual sales schema mappings - redirect to memory connector for testing
@@ -129,16 +131,44 @@ public class RedirectConnectorMetadata
             return Optional.empty();
         }
 
-        // Construct the lookup key for the simulated RPC call
-        String lookupKey = schemaName + "." + tableNameStr;
+        // If MetaServiceClient is configured, use it for dynamic redirection
+        if (metaServiceClient != null) {
+            try {
+                String fullTableName = schemaName + "." + tableNameStr;
+                TableMetadata metadata = metaServiceClient.getTableMetadataByName(fullTableName);
 
-        // Simulate RPC call to get physical table location
-        // In a real implementation, this would be something like:
-        // CatalogSchemaTableName physicalTable = rpcClient.resolveTable(schemaName, tableNameStr);
+                if (metadata != null && metadata.getTable() != null) {
+                    TableInfo tableInfo = metadata.getTable();
+
+                    // Simplified routing: redirect all tables to readservice catalog
+                    // In a full implementation, you would check table type and make routing decisions
+                    CatalogSchemaTableName physicalTable = new CatalogSchemaTableName(
+                            "readservice",           // Target catalog
+                            schemaName,              // Keep schema name
+                            String.valueOf(tableInfo.getId())); // Use table ID as table name
+
+                    log.info("=== REDIRECT PLUGIN: ✓ MetaService redirect %s.%s -> %s.%s.%s (type=%d)",
+                            schemaName, tableNameStr,
+                            physicalTable.getCatalogName(),
+                            physicalTable.getSchemaTableName().getSchemaName(),
+                            physicalTable.getSchemaTableName().getTableName(),
+                            tableInfo.getType());
+
+                    return Optional.of(physicalTable);
+                }
+            }
+            catch (Exception e) {
+                log.warn(e, "=== REDIRECT PLUGIN: Failed to query MetaService for %s.%s, falling back to static mapping",
+                        schemaName, tableNameStr);
+            }
+        }
+
+        // Fallback to static mapping if MetaService is not configured or failed
+        String lookupKey = schemaName + "." + tableNameStr;
         CatalogSchemaTableName physicalTable = TABLE_REDIRECTS.get(lookupKey);
 
         if (physicalTable != null) {
-            log.info("=== REDIRECT PLUGIN: ✓ Redirecting %s.%s -> %s.%s.%s",
+            log.info("=== REDIRECT PLUGIN: ✓ Static redirect %s.%s -> %s.%s.%s",
                     schemaName, tableNameStr,
                     physicalTable.getCatalogName(),
                     physicalTable.getSchemaTableName().getSchemaName(),
@@ -148,8 +178,6 @@ public class RedirectConnectorMetadata
             log.info("=== REDIRECT PLUGIN: ✗ No mapping found for %s.%s", schemaName, tableNameStr);
         }
 
-        // Return the physical table if found, otherwise empty
-        // Empty means: "this table doesn't exist in this virtual schema"
         return Optional.ofNullable(physicalTable);
     }
 

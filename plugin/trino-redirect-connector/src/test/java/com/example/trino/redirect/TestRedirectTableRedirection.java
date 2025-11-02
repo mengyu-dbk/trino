@@ -109,7 +109,7 @@ class TestRedirectTableRedirection
     void testNonExistentVirtualTableNotRedirected()
     {
         // Non-existent tables in virtual schemas should return empty
-        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata();
+        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata(null);
 
         Optional<CatalogSchemaTableName> redirect = metadata.redirectTable(
                 testSessionBuilder().build().toConnectorSession(),
@@ -261,7 +261,7 @@ class TestRedirectTableRedirection
             String targetSchema,
             String targetTable)
     {
-        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata();
+        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata(null);
         Session session = testSessionBuilder().build();
 
         Optional<CatalogSchemaTableName> redirect = metadata.redirectTable(
@@ -284,7 +284,7 @@ class TestRedirectTableRedirection
      */
     private void assertNoRedirection(String catalog, String schema, String table)
     {
-        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata();
+        RedirectConnectorMetadata metadata = new RedirectConnectorMetadata(null);
         Session session = testSessionBuilder().build();
 
         // Note: This tests the metadata layer directly
