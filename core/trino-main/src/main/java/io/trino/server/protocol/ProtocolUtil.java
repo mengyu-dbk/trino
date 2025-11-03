@@ -128,7 +128,7 @@ public final class ProtocolUtil
     private static ClientTypeSignature toClientTypeSignature(TypeSignature signature, boolean supportsParametricDateTime)
     {
         if (signature.getBase().equalsIgnoreCase("uint256")) {
-            return new ClientTypeSignature(VARCHAR);
+            return new ClientTypeSignature(VARCHAR, ImmutableList.of(ClientTypeSignatureParameter.ofLong(Integer.MAX_VALUE)));
         }
         if (!supportsParametricDateTime) {
             if (signature.getBase().equalsIgnoreCase(TIMESTAMP)) {
